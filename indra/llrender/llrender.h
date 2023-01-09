@@ -360,9 +360,7 @@ public:
 	LLRender();
 	~LLRender();
     void init(bool needs_vertex_buffer);
-    void initVertexBuffer();
-    void resetVertexBuffer();
-	void shutdown();
+    void shutdown();
 	
 	// Refreshes renderer state to the cached values
 	// Needed when the render context has changed and invalidated the current state
@@ -395,13 +393,26 @@ public:
 	LLVector3 getUITranslation();
 	LLVector3 getUIScale();
 
-	void flush();
+    // flush any pending immediate mode style vertices
+    // If vertices are flushed to GL, returns an LLVertexBuffer that can be used to quickly push
+    // those vertices again without using immediate mode emulation
+	LLVertexBuffer* flush();
 
 	void begin(const GLuint& mode);
-	void end();
+
+    // may implicitly call flush and return an LLVertexBuffer
+	LLVertexBuffer* end();
+
 	void vertex2i(const GLint& x, const GLint& y);
 	void vertex2f(const GLfloat& x, const GLfloat& y);
+
+    // GL like vertex3f, ignores uioffset/scale and doesn't support quads
 	void vertex3f(const GLfloat& x, const GLfloat& y, const GLfloat& z);
+
+    // UI variant of vertex3f, applies uioffset/scale and supports quads
+    void vertex3fui(const GLfloat& x, const GLfloat& y, const GLfloat& z);
+    void vertex3fvui(const GLfloat* v);
+
 	void vertex2fv(const GLfloat* v);
 	void vertex3fv(const GLfloat* v);
 	
@@ -482,11 +493,14 @@ private:
 	U32				mCurrTextureUnitIndex;
 	bool				mCurrColorMask[4];
 
-	LLPointer<LLVertexBuffer>	mBuffer;
-	LLStrider<LLVector3>		mVerticesp;
-	LLStrider<LLVector2>		mTexcoordsp;
-	LLStrider<LLColor4U>		mColorsp;
-	std::vector<LLTexUnit*>		mTexUnits;
+    // increment mCount, expand vectors below as needed
+    void incrCount();
+
+	std::vector<LLVector4a>     mVertices;
+    std::vector<LLVector2>     mTexCoords;
+    std::vector<LLColor4U>     mColors;
+
+    std::vector<LLTexUnit*>		mTexUnits;
 	LLTexUnit*			mDummyTexUnit;
 	std::vector<LLLightState*> mLightState;
 

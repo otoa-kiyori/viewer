@@ -461,12 +461,12 @@ void LLVOGrass::plantBlades()
 }
 
 void LLVOGrass::getGeometry(S32 idx,
-								LLStrider<LLVector4a>& verticesp,
-								LLStrider<LLVector3>& normalsp, 
-								LLStrider<LLVector2>& texcoordsp,
-								LLStrider<LLColor4U>& colorsp, 
-								LLStrider<LLColor4U>& emissivep,
-								LLStrider<U16>& indicesp)
+								LLVector4a* &verticesp,
+								LLVector4a* &normalsp, 
+								LLVector2* &texcoordsp,
+								LLColor4U* &colorsp, 
+								LLColor4U* &emissivep,
+								U16* &indicesp)
 {
 	if(!mNumBlades)//stop rendering grass
 	{
@@ -548,15 +548,15 @@ void LLVOGrass::getGeometry(S32 idx,
 		(*verticesp++).load3(v1.mV);
 		(*verticesp++).load3(v1.mV);
 
-		*(normalsp++)   = normal1;
-		*(normalsp++)   = normal2;
-		*(normalsp++)   = normal1;
-		*(normalsp++)   = normal2;
+		(*normalsp++).load3(normal1.mV);
+		(*normalsp++).load3(normal2.mV);
+		(*normalsp++).load3(normal1.mV);
+		(*normalsp++).load3(normal2.mV);
 
-		*(normalsp++)   = normal1;
-		*(normalsp++)   = normal2;
-		*(normalsp++)   = normal1;
-		*(normalsp++)   = normal2;
+		(*normalsp++).load3(normal1.mV);
+		(*normalsp++).load3(normal2.mV);
+		(*normalsp++).load3(normal1.mV);
+		(*normalsp++).load3(normal2.mV);
 
 		*(colorsp++)   = color;
 		*(colorsp++)   = color;
@@ -674,17 +674,14 @@ void LLGrassPartition::getGeometry(LLSpatialGroup* group)
 
 	LLVertexBuffer* buffer = group->mVertexBuffer;
 
-	LLStrider<U16> indicesp;
-	LLStrider<LLVector4a> verticesp;
-	LLStrider<LLVector3> normalsp;
-	LLStrider<LLVector2> texcoordsp;
-	LLStrider<LLColor4U> colorsp;
+    LLMappedVertexData md = buffer->mapVertexBuffer();
+    U16* indicesp = buffer->mapIndexBuffer();
 
-	buffer->getVertexStrider(verticesp);
-	buffer->getNormalStrider(normalsp);
-	buffer->getColorStrider(colorsp);
-	buffer->getTexCoord0Strider(texcoordsp);
-	buffer->getIndexStrider(indicesp);
+    LLVector4a* verticesp = md.mPosition;
+    LLVector4a* normalsp = md.mNormal;
+    LLColor4U* colorsp = md.mColor;
+    LLColor4U* emissivep = md.mEmissive;
+    LLVector2* texcoordsp = md.mTexCoord0;
 
 	LLSpatialGroup::drawmap_elem_t& draw_vec = group->mDrawMap[mRenderPass];	
 
@@ -696,9 +693,6 @@ void LLGrassPartition::getGeometry(LLSpatialGroup* group)
 		facep->setIndicesIndex(index_count);
 		facep->setVertexBuffer(buffer);
 		facep->setPoolType(LLDrawPool::POOL_ALPHA);
-
-		//dummy parameter (unused by this implementation)
-		LLStrider<LLColor4U> emissivep;
 
 		object->getGeometry(facep->getTEOffset(), verticesp, normalsp, texcoordsp, colorsp, emissivep, indicesp);
 		
@@ -731,9 +725,6 @@ void LLGrassPartition::getGeometry(LLSpatialGroup* group)
 				//facep->getTexture(),
 				buffer, object->isSelected(), fullbright);
 
-			const LLVector4a* exts = group->getObjectExtents();
-			info->mExtents[0] = exts[0];
-			info->mExtents[1] = exts[1];
 			info->mVSize = vsize;
 			draw_vec.push_back(info);
 			//for alpha sorting
@@ -741,7 +732,9 @@ void LLGrassPartition::getGeometry(LLSpatialGroup* group)
 		}
 	}
 
-	buffer->flush();
+    buffer->unmapIndexBuffer();
+    buffer->unmapVertexBuffer();
+
 	mFaceList.clear();
 }
 

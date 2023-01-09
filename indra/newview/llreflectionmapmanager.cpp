@@ -666,7 +666,7 @@ void LLReflectionMapManager::updateUniforms()
     }
 
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DISPLAY;
-
+    LL_PROFILE_GPU_ZONE("reflection map ubo");
     // structure for packing uniform buffer object
     // see class3/deferred/reflectionProbeF.glsl
     struct ReflectionProbeData
@@ -786,7 +786,7 @@ void LLReflectionMapManager::updateUniforms()
     {
         LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("rmmsu - update buffer");
         glBindBuffer(GL_UNIFORM_BUFFER, mUBO);
-        glBufferData(GL_UNIFORM_BUFFER, sizeof(ReflectionProbeData), &rpd, GL_STREAM_DRAW);
+        glBufferData(GL_UNIFORM_BUFFER, sizeof(ReflectionProbeData), &rpd, GL_DYNAMIC_DRAW);
         glBindBuffer(GL_UNIFORM_BUFFER, 0);
     }
 }
@@ -903,16 +903,15 @@ void LLReflectionMapManager::initReflectionMaps()
         LLPointer<LLVertexBuffer> buff = new LLVertexBuffer(mask, GL_STATIC_DRAW);
         buff->allocateBuffer(4, 0, TRUE);
 
-        LLStrider<LLVector3> v;
+        LLMappedVertexData md = buff->mapVertexBuffer();
+        LLVector4a* v = md.mPosition;
         
-        buff->getVertexStrider(v);
-        
-        v[0] = LLVector3(-1, -1, -1);
-        v[1] = LLVector3(1, -1, -1);
-        v[2] = LLVector3(-1, 1, -1);
-        v[3] = LLVector3(1, 1, -1);
+        v[0].set(-1, -1, -1);
+        v[1].set(1, -1, -1);
+        v[2].set(-1, 1, -1);
+        v[3].set(1, 1, -1);
 
-        buff->flush();
+        buff->unmapVertexBuffer();
 
         mVertexBuffer = buff;
     }

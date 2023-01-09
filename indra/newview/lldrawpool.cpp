@@ -463,8 +463,8 @@ void LLRenderPass::pushGLTFBatches(U32 type, U32 mask)
         
         applyModelMatrix(params);
 
-        params.mVertexBuffer->setBufferFast(mask);
-        params.mVertexBuffer->drawRangeFast(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+        params.mVertexBuffer->setBuffer(mask);
+        params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
         teardown_texture_matrix(params);
     }
@@ -497,8 +497,8 @@ void LLRenderPass::pushRiggedGLTFBatches(U32 type, U32 mask)
             lastMeshId = params.mSkinInfo->mHash;
         }
 
-        params.mVertexBuffer->setBufferFast(mask);
-        params.mVertexBuffer->drawRangeFast(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+        params.mVertexBuffer->setBuffer(mask);
+        params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
         teardown_texture_matrix(params);
     }
@@ -603,6 +603,7 @@ void LLRenderPass::applyModelMatrix(const LLDrawInfo& params)
 void LLRenderPass::pushBatch(LLDrawInfo& params, U32 mask, BOOL texture, BOOL batch_textures)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
+    //LL_PROFILE_GPU_ZONE("LLRenderPass::pushBatch");
     if (!params.mCount)
     {
         return;
@@ -645,13 +646,8 @@ void LLRenderPass::pushBatch(LLDrawInfo& params, U32 mask, BOOL texture, BOOL ba
 		}
 	}
 	
-    //if (params.mGroup) // TOO LATE!
-    //{
-    //    params.mGroup->rebuildMesh();
-    //}
-
-    params.mVertexBuffer->setBufferFast(mask);
-    params.mVertexBuffer->drawRangeFast(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+    params.mVertexBuffer->setBuffer(mask);
+    params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
 	if (tex_setup)
 	{

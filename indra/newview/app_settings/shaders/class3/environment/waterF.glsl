@@ -259,10 +259,5 @@ void main()
 
     //color.rgb = radiance;
 	frag_color = color;
-
-#if defined(WATER_EDGE)
-    gl_FragDepth = 0.9999847f;
-#endif
-	
 }
 

@@ -200,7 +200,7 @@ LLVector2 LLSurfacePatch::getTexCoords(const U32 x, const U32 y) const
 }
 
 
-void LLSurfacePatch::eval(const U32 x, const U32 y, const U32 stride, LLVector3 *vertex, LLVector3 *normal,
+void LLSurfacePatch::eval(const U32 x, const U32 y, const U32 stride, LLVector4a *vertex, LLVector4a *normal,
 						  LLVector2 *tex0, LLVector2 *tex1)
 {
 	if (!mSurfacep || !mSurfacep->getRegion() || !mSurfacep->getGridsPerEdge() || !mVObjp)
@@ -212,13 +212,13 @@ void LLSurfacePatch::eval(const U32 x, const U32 y, const U32 stride, LLVector3 
 	U32 surface_stride = mSurfacep->getGridsPerEdge();
 	U32 point_offset = x + y*surface_stride;
 
-	*normal = getNormal(x, y);
+	normal->load3(getNormal(x, y).mV);
 
 	LLVector3 pos_agent = getOriginAgent();
 	pos_agent.mV[VX] += x * mSurfacep->getMetersPerGrid();
 	pos_agent.mV[VY] += y * mSurfacep->getMetersPerGrid();
 	pos_agent.mV[VZ]  = *(mDataZ + point_offset);
-	*vertex     = pos_agent-mVObjp->getRegion()->getOriginAgent();
+	vertex->loadua((pos_agent-mVObjp->getRegion()->getOriginAgent()).mV);
 
 	LLVector3 rel_pos = pos_agent - mSurfacep->getOriginAgent();
 	LLVector3 tex_pos = rel_pos * (1.f/surface_stride);

@@ -8698,13 +8698,13 @@
   <key>OctreeStaticObjectSizeFactor</key>
   <map>
     <key>Comment</key>
-    <string>Multiplier on static object size for determining octree node size </string>
+    <string>Minimum octree node size for static objects </string>
     <key>Persist</key>
     <integer>1</integer>
     <key>Type</key>
     <string>S32</string>
     <key>Value</key>
-    <integer>3</integer>
+    <integer>16</integer>
   </map>
 
   <key>OctreeAlphaDistanceFactor</key>
@@ -8719,7 +8719,7 @@
     <array>
       <real>0.1</real>
       <real>0.0</real>
-      <real>0.0</real>
+      <real>32.0</real>
     </array>
   </map>
 
@@ -8745,7 +8745,7 @@
     <string>Vector3</string>
     <key>Value</key>
     <array>
-      <real>0.01</real>
+      <real>0.5</real>
       <real>0.0</real>
       <real>0.0</real>
     </array>

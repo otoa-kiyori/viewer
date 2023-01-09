@@ -35,6 +35,8 @@
 #include "llrendertarget.h"
 #include "lltexture.h"
 #include "llshadermgr.h"
+#include <unordered_map>
+#include <boost/functional/hash.hpp>
 
 #if LL_WINDOWS
 extern void APIENTRY gl_debug_callback(GLenum source,
@@ -65,6 +67,16 @@ LLVector2 LLRender::sUIGLScaleFactor = LLVector2(1.f, 1.f);
 
 static const U32 LL_NUM_TEXTURE_LAYERS = 32; 
 static const U32 LL_NUM_LIGHT_UNITS = 8;
+
+static std::size_t sVBHash = 0;
+
+struct LLVBCache
+{
+    LLPointer<LLVertexBuffer> vb;
+    std::chrono::steady_clock::time_point touched;
+};
+
+static std::unordered_map<std::size_t, LLVBCache> sVBCache;
 
 static const GLenum sGLTextureType[] =
 {
@@ -879,34 +891,17 @@ void LLRender::init(bool needs_vertex_buffer)
     // necessary for reflection maps
     glEnable(GL_TEXTURE_CUBE_MAP_SEAMLESS);
 
-	if (sGLCoreProfile && !LLVertexBuffer::sUseVAO)
+	if (sGLCoreProfile)
 	{ //bind a dummy vertex array object so we're core profile compliant
 		U32 ret;
 		glGenVertexArrays(1, &ret);
 		glBindVertexArray(ret);
 	}
 
-    if (needs_vertex_buffer)
-    {
-        initVertexBuffer();
-    }
-}
-
-void LLRender::initVertexBuffer()
-{
-    llassert_always(mBuffer.isNull());
-    stop_glerror();
-    mBuffer = new LLVertexBuffer(immediate_mask, 0);
-    mBuffer->allocateBuffer(4096, 0, TRUE);
-    mBuffer->getVertexStrider(mVerticesp);
-    mBuffer->getTexCoord0Strider(mTexcoordsp);
-    mBuffer->getColorStrider(mColorsp);
-    stop_glerror();
-}
-
-void LLRender::resetVertexBuffer()
-{
-    mBuffer = NULL;
+    mVertices.resize(1024);
+    mTexCoords.resize(1024);
+    mColors.resize(1024);
+    mCount = 0;
 }
 
 void LLRender::shutdown()
@@ -924,7 +919,6 @@ void LLRender::shutdown()
 		delete mLightState[i];
 	}
 	mLightState.clear();
-    resetVertexBuffer();
 }
 
 void LLRender::refreshState(void)
@@ -1572,131 +1566,196 @@ void LLRender::begin(const GLuint& mode)
 	}
 }
 
-void LLRender::end()
+LLVertexBuffer* LLRender::end()
 { 
 	if (mCount == 0)
 	{
-		return;
+		return nullptr;
 		//IMM_ERRS << "GL begin and end called with no vertices specified." << LL_ENDL;
 	}
 
-	if ((mMode != LLRender::QUADS && 
+	if (mMode != LLRender::QUADS && 
 		mMode != LLRender::LINES &&
 		mMode != LLRender::TRIANGLES &&
-		mMode != LLRender::POINTS) ||
-		mCount > 2048)
+		mMode != LLRender::POINTS)
 	{
-		flush();
+		return flush();
 	}
+
+    return nullptr;
 }
-void LLRender::flush()
+LLVertexBuffer* LLRender::flush()
 {
-	if (mCount > 0)
-	{
+    if (mCount > 0)
+    {
         LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
-		if (!mUIOffset.empty())
-		{
-			sUICalls++;
-			sUIVerts += mCount;
-		}
-		
-		//store mCount in a local variable to avoid re-entrance (drawArrays may call flush)
-		U32 count = mCount;
-
-			if (mMode == LLRender::QUADS && !sGLCoreProfile)
-			{
-				if (mCount%4 != 0)
-				{
-				count -= (mCount % 4);
-				LL_WARNS() << "Incomplete quad requested." << LL_ENDL;
-				}
-			}
-			
-			if (mMode == LLRender::TRIANGLES)
-			{
-				if (mCount%3 != 0)
-				{
-				count -= (mCount % 3);
-				LL_WARNS() << "Incomplete triangle requested." << LL_ENDL;
-				}
-			}
-			
-			if (mMode == LLRender::LINES)
-			{
-				if (mCount%2 != 0)
-				{
-				count -= (mCount % 2);
-				LL_WARNS() << "Incomplete line requested." << LL_ENDL;
-			}
-		}
-
-		mCount = 0;
-
-        if (mBuffer)
+        if (!mUIOffset.empty())
         {
-            if (mBuffer->useVBOs() && !mBuffer->isLocked())
-            { //hack to only flush the part of the buffer that was updated (relies on stream draw using buffersubdata)
-                mBuffer->getVertexStrider(mVerticesp, 0, count);
-                mBuffer->getTexCoord0Strider(mTexcoordsp, 0, count);
-                mBuffer->getColorStrider(mColorsp, 0, count);
-            }
+            sUICalls++;
+            sUIVerts += mCount;
+        }
 
-            mBuffer->flush();
-            mBuffer->setBuffer(immediate_mask);
+        //store mCount in a local variable to avoid re-entrance (drawArrays may call flush)
+        U32 count = mCount;
 
-            if (mMode == LLRender::QUADS && sGLCoreProfile)
+        if (mMode == LLRender::QUADS && !sGLCoreProfile)
+        {
+            if (mCount % 4 != 0)
             {
-                mBuffer->drawArrays(LLRender::TRIANGLES, 0, count);
-                mQuadCycle = 1;
+                count -= (mCount % 4);
+                LL_WARNS() << "Incomplete quad requested." << LL_ENDL;
             }
-            else
+        }
+
+        if (mMode == LLRender::TRIANGLES)
+        {
+            if (mCount % 3 != 0)
             {
-                mBuffer->drawArrays(mMode, 0, count);
+                count -= (mCount % 3);
+                LL_WARNS() << "Incomplete triangle requested." << LL_ENDL;
             }
+        }
+
+        if (mMode == LLRender::LINES)
+        {
+            if (mCount % 2 != 0)
+            {
+                count -= (mCount % 2);
+                LL_WARNS() << "Incomplete line requested." << LL_ENDL;
+            }
+        }
+
+        mCount = 0;
+
+        U32 attribute_mask = LLGLSLShader::sCurBoundShaderPtr->mAttributeMask;
+
+        // check the VB cache before making a new vertex buffer
+        // This is a giant hack to deal with (mostly) our terrible UI rendering code
+        // that was built on top of OpenGL immediate mode.  Huge performance wins
+        // can be had by not uploading geometry to VRAM unless absolutely necessary.
+        // Most of our usage of the "immediate mode" style draw calls is actually
+        // sending the same geometry over and over again.
+        // To leverage this, we maintain a running hash of the vertex stream being
+        // built up before a flush, and then check that hash against a VB 
+        // cache just before creating a vertex buffer in VRAM
+        auto& cache = sVBCache.find(sVBHash);
+
+        LLPointer<LLVertexBuffer> vb;
+        
+        if (cache != sVBCache.end())
+        {
+            LL_PROFILE_ZONE_NAMED_CATEGORY_VERTEX("vb cache hit");
+            // cache hit, just use the cached buffer
+            vb = cache->second.vb;
+            cache->second.touched = std::chrono::steady_clock::now();
         }
         else
         {
-            // mBuffer is present in main thread and not present in an image thread
-            LL_ERRS() << "A flush call from outside main rendering thread" << LL_ENDL;
+            LL_PROFILE_ZONE_NAMED_CATEGORY_VERTEX("vb cache miss");
+            vb = new LLVertexBuffer(attribute_mask, GL_STATIC_DRAW);
+            vb->allocateBuffer(count, 0, false);
+
+            vb->setPositionData(&mVertices[0]);
+            
+            if (attribute_mask & LLVertexBuffer::MAP_TEXCOORD0)
+            {
+                vb->setTexCoord0Data(&mTexCoords[0]);
+            }
+
+            if (attribute_mask & LLVertexBuffer::MAP_COLOR)
+            {
+                vb->setColorData(&mColors[0]);
+            }
+
+            vb->unbind();
+
+            sVBCache[sVBHash] = { vb , std::chrono::steady_clock::now() };
+
+            static U32 miss_count = 0;
+            miss_count++;
+            if (miss_count > 1024)
+            {
+                LL_PROFILE_ZONE_NAMED_CATEGORY_VERTEX("vb cache clean");
+                miss_count = 0;
+                auto now = std::chrono::steady_clock::now();
+                
+                using namespace std::chrono_literals;
+                // every 1024 misses, clean the cache of any VBs that haven't been touched in the last second
+                for (auto& iter = sVBCache.begin(); iter != sVBCache.end(); )
+                {
+                    if (now - iter->second.touched > 1s)
+                    {
+                        iter = sVBCache.erase(iter);
+                    }
+                    else
+                    {
+                        ++iter;
+                    }
+                }
+            }
         }
 
-		
-		mVerticesp[0] = mVerticesp[count];
-		mTexcoordsp[0] = mTexcoordsp[count];
-		mColorsp[0] = mColorsp[count];
-		
-		mCount = 0;
+        // reset hash
+        sVBHash = 0;
+
+        // push draw call
+        vb->setBuffer(attribute_mask);
+
+        if (mMode == LLRender::QUADS && sGLCoreProfile)
+        {
+            vb->drawArrays(LLRender::TRIANGLES, 0, count);
+            mQuadCycle = 1;
+        }
+        else
+        {
+            vb->drawArrays(mMode, 0, count);
+        }
+    
+		mVertices[0] = mVertices[count];
+		mTexCoords[0] = mTexCoords[count];
+		mColors[0] = mColors[count];
+
+        return vb;
 	}
+
+    return nullptr;
 }
 
-void LLRender::vertex3f(const GLfloat& x, const GLfloat& y, const GLfloat& z)
-{ 
-	//the range of mVerticesp, mColorsp and mTexcoordsp is [0, 4095]
-	if (mCount > 2048)
-	{ //break when buffer gets reasonably full to keep GL command buffers happy and avoid overflow below
-		switch (mMode)
-		{
-			case LLRender::POINTS: flush(); break;
-			case LLRender::TRIANGLES: if (mCount%3==0) flush(); break;
-			case LLRender::QUADS: if(mCount%4 == 0) flush(); break; 
-			case LLRender::LINES: if (mCount%2 == 0) flush(); break;
-		}
-	}
-			
-	if (mCount > 4094)
-	{
-	//	LL_WARNS() << "GL immediate mode overflow.  Some geometry not drawn." << LL_ENDL;
-		return;
-	}
+void LLRender::incrCount()
+{
+    boost::hash_combine(sVBHash, *((std::size_t*)mVertices[mCount].getF32ptr()));
 
+    if (LLGLSLShader::sCurBoundShaderPtr->mAttributeMask & LLVertexBuffer::MAP_TEXCOORD0)
+    {
+        boost::hash_combine(sVBHash, *((std::size_t*)mTexCoords[mCount].mV));
+    }
+
+    if (LLGLSLShader::sCurBoundShaderPtr->mAttributeMask & LLVertexBuffer::MAP_COLOR)
+    {
+        boost::hash_combine(sVBHash, *((U32*)mColors[mCount].mV));
+    }
+
+    mCount++;
+    U32 size = mCount + 1;
+
+    if (mVertices.size() < size)
+    {
+        mVertices.resize(size);
+        mTexCoords.resize(size);
+        mColors.resize(size);
+    }
+}
+
+void LLRender::vertex3fui(const GLfloat& x, const GLfloat& y, const GLfloat& z)
+{ 
 	if (mUIOffset.empty())
 	{
-		mVerticesp[mCount] = LLVector3(x,y,z);
+        mVertices[mCount].set(x, y, z);
 	}
 	else
 	{
 		LLVector3 vert = (LLVector3(x,y,z)+mUIOffset.back()).scaledVec(mUIScale.back());
-		mVerticesp[mCount] = vert;
+		mVertices[mCount].load3(vert.mV);
 	}
 
 	if (mMode == LLRender::QUADS && LLRender::sGLCoreProfile)
@@ -1706,32 +1765,44 @@ void LLRender::vertex3f(const GLfloat& x, const GLfloat& y, const GLfloat& z)
 		{ //copy two vertices so fourth quad element will add a triangle
 			mQuadCycle = 0;
 	
-			mCount++;
-			mVerticesp[mCount] = mVerticesp[mCount-3];
-			mColorsp[mCount] = mColorsp[mCount-3];
-			mTexcoordsp[mCount] = mTexcoordsp[mCount-3];
+            incrCount();
 
-			mCount++;
-			mVerticesp[mCount] = mVerticesp[mCount-2];
-			mColorsp[mCount] = mColorsp[mCount-2];
-			mTexcoordsp[mCount] = mTexcoordsp[mCount-2];
+			mVertices[mCount] = mVertices[mCount-3];
+			mColors[mCount] = mColors[mCount-3];
+			mTexCoords[mCount] = mTexCoords[mCount-3];
+
+            incrCount();
+			mVertices[mCount] = mVertices[mCount-2];
+			mColors[mCount] = mColors[mCount-2];
+			mTexCoords[mCount] = mTexCoords[mCount-2];
 		}
 	}
 
-	mCount++;
-	mVerticesp[mCount] = mVerticesp[mCount-1];
-	mColorsp[mCount] = mColorsp[mCount-1];
-	mTexcoordsp[mCount] = mTexcoordsp[mCount-1];	
+    incrCount();
+    mVertices[mCount] = mVertices[mCount - 1];
+    mColors[mCount] = mColors[mCount - 1];
+    mTexCoords[mCount] = mTexCoords[mCount - 1];
+}
+
+void LLRender::vertex3fvui(const GLfloat* v)
+{
+    vertex3fui(v[0], v[1], v[2]);
+}
+
+void LLRender::vertex3f(const GLfloat& x, const GLfloat& y, const GLfloat& z)
+{
+    llassert(mMode != QUADS);
+    llassert(mUIOffset.empty() || mUIOffset.back() == LLVector3(0, 0, 0) && mUIScale.back() == LLVector3(1, 1, 1));
+
+    mVertices[mCount].set(x, y, z);
+    incrCount();
+    mVertices[mCount] = mVertices[mCount - 1];
+    mColors[mCount] = mColors[mCount - 1];
+    mTexCoords[mCount] = mTexCoords[mCount - 1];
 }
 
 void LLRender::vertexBatchPreTransformed(LLVector3* verts, S32 vert_count)
 {
-	if (mCount + vert_count > 4094)
-	{
-		//	LL_WARNS() << "GL immediate mode overflow.  Some geometry not drawn." << LL_ENDL;
-		return;
-	}
-
 	if (sGLCoreProfile && mMode == LLRender::QUADS)
 	{ //quads are deprecated, convert to triangle list
 		S32 i = 0;
@@ -1739,57 +1810,57 @@ void LLRender::vertexBatchPreTransformed(LLVector3* verts, S32 vert_count)
 		while (i < vert_count)
 		{
 			//read first three
-			mVerticesp[mCount++] = verts[i++];
-			mTexcoordsp[mCount] = mTexcoordsp[mCount-1];
-			mColorsp[mCount] = mColorsp[mCount-1];
+			mVertices[mCount].load3(verts[i++].mV);
+            incrCount();
+			mTexCoords[mCount] = mTexCoords[mCount-1];
+			mColors[mCount] = mColors[mCount-1];
 
-			mVerticesp[mCount++] = verts[i++];
-			mTexcoordsp[mCount] = mTexcoordsp[mCount-1];
-			mColorsp[mCount] = mColorsp[mCount-1];
+            mVertices[mCount].load3(verts[i++].mV);
+            incrCount();
+			mTexCoords[mCount] = mTexCoords[mCount-1];
+			mColors[mCount] = mColors[mCount-1];
 
-			mVerticesp[mCount++] = verts[i++];
-			mTexcoordsp[mCount] = mTexcoordsp[mCount-1];
-			mColorsp[mCount] = mColorsp[mCount-1];
+            mVertices[mCount].load3(verts[i++].mV);
+            incrCount();
+			mTexCoords[mCount] = mTexCoords[mCount-1];
+			mColors[mCount] = mColors[mCount-1];
 
 			//copy two
-			mVerticesp[mCount++] = verts[i-3];
-			mTexcoordsp[mCount] = mTexcoordsp[mCount-1];
-			mColorsp[mCount] = mColorsp[mCount-1];
+			mVertices[mCount].load3( verts[i-3].mV);
+            incrCount();
+			mTexCoords[mCount] = mTexCoords[mCount-1];
+			mColors[mCount] = mColors[mCount-1];
 
-			mVerticesp[mCount++] = verts[i-1];
-			mTexcoordsp[mCount] = mTexcoordsp[mCount-1];
-			mColorsp[mCount] = mColorsp[mCount-1];
+			mVertices[mCount].load3(verts[i-1].mV);
+            incrCount();
+			mTexCoords[mCount] = mTexCoords[mCount-1];
+			mColors[mCount] = mColors[mCount-1];
 			
 			//copy last one
-			mVerticesp[mCount++] = verts[i++];
-			mTexcoordsp[mCount] = mTexcoordsp[mCount-1];
-			mColorsp[mCount] = mColorsp[mCount-1];
+            mVertices[mCount].load3(verts[i++].mV);
+            incrCount();
+			mTexCoords[mCount] = mTexCoords[mCount-1];
+			mColors[mCount] = mColors[mCount-1];
 		}
 	}
 	else
 	{
 		for (S32 i = 0; i < vert_count; i++)
 		{
-			mVerticesp[mCount] = verts[i];
+			mVertices[mCount].load3(verts[i].mV);
 
-			mCount++;
-			mTexcoordsp[mCount] = mTexcoordsp[mCount-1];
-			mColorsp[mCount] = mColorsp[mCount-1];
+            incrCount();
+			mTexCoords[mCount] = mTexCoords[mCount-1];
+			mColors[mCount] = mColors[mCount-1];
 		}
 	}
 
 	if( mCount > 0 ) // ND: Guard against crashes if mCount is zero, yes it can happen
-		mVerticesp[mCount] = mVerticesp[mCount-1];
+		mVertices[mCount] = mVertices[mCount-1];
 }
 
 void LLRender::vertexBatchPreTransformed(LLVector3* verts, LLVector2* uvs, S32 vert_count)
 {
-	if (mCount + vert_count > 4094)
-	{
-		//	LL_WARNS() << "GL immediate mode overflow.  Some geometry not drawn." << LL_ENDL;
-		return;
-	}
-
 	if (sGLCoreProfile && mMode == LLRender::QUADS)
 	{ //quads are deprecated, convert to triangle list
 		S32 i = 0;
@@ -1797,49 +1868,55 @@ void LLRender::vertexBatchPreTransformed(LLVector3* verts, LLVector2* uvs, S32 v
 		while (i < vert_count)
 		{
 			//read first three
-			mVerticesp[mCount] = verts[i];
-			mTexcoordsp[mCount++] = uvs[i++];
-			mColorsp[mCount] = mColorsp[mCount-1];
+			mVertices[mCount].load3(verts[i].mV);
+			mTexCoords[mCount] = uvs[i++];
+            incrCount();
+			mColors[mCount] = mColors[mCount-1];
 
-			mVerticesp[mCount] = verts[i];
-			mTexcoordsp[mCount++] = uvs[i++];
-			mColorsp[mCount] = mColorsp[mCount-1];
+            mVertices[mCount].load3(verts[i].mV);
+			mTexCoords[mCount] = uvs[i++];
+            incrCount();
+			mColors[mCount] = mColors[mCount-1];
 
-			mVerticesp[mCount] = verts[i];
-			mTexcoordsp[mCount++] = uvs[i++];
-			mColorsp[mCount] = mColorsp[mCount-1];
+            mVertices[mCount].load3(verts[i].mV);
+			mTexCoords[mCount] = uvs[i++];
+            incrCount();
+			mColors[mCount] = mColors[mCount-1];
 
 			//copy last two
-			mVerticesp[mCount] = verts[i-3];
-			mTexcoordsp[mCount++] = uvs[i-3];
-			mColorsp[mCount] = mColorsp[mCount-1];
+            mVertices[mCount].load3(verts[i-3].mV);
+			mTexCoords[mCount] = uvs[i-3];
+            incrCount();
+			mColors[mCount] = mColors[mCount-1];
 
-			mVerticesp[mCount] = verts[i-1];
-			mTexcoordsp[mCount++] = uvs[i-1];
-			mColorsp[mCount] = mColorsp[mCount-1];
+            mVertices[mCount].load3(verts[i-1].mV);
+			mTexCoords[mCount] = uvs[i-1];
+            incrCount();
+			mColors[mCount] = mColors[mCount-1];
 
 			//copy last one
-			mVerticesp[mCount] = verts[i];
-			mTexcoordsp[mCount++] = uvs[i++];
-			mColorsp[mCount] = mColorsp[mCount-1];
+            mVertices[mCount].load3(verts[i].mV);
+			mTexCoords[mCount] = uvs[i++];
+            incrCount();
+			mColors[mCount] = mColors[mCount-1];
 		}
 	}
 	else
 	{
 		for (S32 i = 0; i < vert_count; i++)
 		{
-			mVerticesp[mCount] = verts[i];
-			mTexcoordsp[mCount] = uvs[i];
+            mVertices[mCount].load3(verts[i].mV);
+			mTexCoords[mCount] = uvs[i];
 
-			mCount++;
-			mColorsp[mCount] = mColorsp[mCount-1];
+            incrCount();
+			mColors[mCount] = mColors[mCount-1];
 		}
 	}
 
 	if (mCount > 0)
 	{
-		mVerticesp[mCount] = mVerticesp[mCount - 1];
-		mTexcoordsp[mCount] = mTexcoordsp[mCount - 1];
+		mVertices[mCount] = mVertices[mCount - 1];
+		mTexCoords[mCount] = mTexCoords[mCount - 1];
 	}
 }
 
@@ -1859,66 +1936,72 @@ void LLRender::vertexBatchPreTransformed(LLVector3* verts, LLVector2* uvs, LLCol
 		while (i < vert_count)
 		{
 			//read first three
-			mVerticesp[mCount] = verts[i];
-			mTexcoordsp[mCount] = uvs[i];
-			mColorsp[mCount++] = colors[i++];
+            mVertices[mCount].load3(verts[i].mV);
+			mTexCoords[mCount] = uvs[i];
+			mColors[mCount] = colors[i++];
+            incrCount();
 
-			mVerticesp[mCount] = verts[i];
-			mTexcoordsp[mCount] = uvs[i];
-			mColorsp[mCount++] = colors[i++];
+            mVertices[mCount].load3(verts[i].mV);
+			mTexCoords[mCount] = uvs[i];
+			mColors[mCount] = colors[i++];
+            incrCount();
 
-			mVerticesp[mCount] = verts[i];
-			mTexcoordsp[mCount] = uvs[i];
-			mColorsp[mCount++] = colors[i++];
+            mVertices[mCount].load3(verts[i].mV);
+			mTexCoords[mCount] = uvs[i];
+			mColors[mCount] = colors[i++];
+            incrCount();
 
 			//copy last two
-			mVerticesp[mCount] = verts[i-3];
-			mTexcoordsp[mCount] = uvs[i-3];
-			mColorsp[mCount++] = colors[i-3];
+            mVertices[mCount].load3(verts[i-3].mV);
+			mTexCoords[mCount] = uvs[i-3];
+			mColors[mCount] = colors[i-3];
+            incrCount();
 
-			mVerticesp[mCount] = verts[i-1];
-			mTexcoordsp[mCount] = uvs[i-1];
-			mColorsp[mCount++] = colors[i-1];
+            mVertices[mCount].load3(verts[i-1].mV);
+			mTexCoords[mCount] = uvs[i-1];
+			mColors[mCount] = colors[i-1];
+            incrCount();
 
 			//copy last one
-			mVerticesp[mCount] = verts[i];
-			mTexcoordsp[mCount] = uvs[i];
-			mColorsp[mCount++] = colors[i++];
+            mVertices[mCount].load3(verts[i].mV);
+			mTexCoords[mCount] = uvs[i];
+			mColors[mCount] = colors[i++];
+            incrCount();
 		}
 	}
 	else
 	{
 		for (S32 i = 0; i < vert_count; i++)
 		{
-			mVerticesp[mCount] = verts[i];
-			mTexcoordsp[mCount] = uvs[i];
-			mColorsp[mCount] = colors[i];
+            mVertices[mCount].load3(verts[i].mV);
+			mTexCoords[mCount] = uvs[i];
+			mColors[mCount] = colors[i];
 
-			mCount++;
+            incrCount();
 		}
 	}
 
 	if (mCount > 0)
 	{
-		mVerticesp[mCount] = mVerticesp[mCount - 1];
-		mTexcoordsp[mCount] = mTexcoordsp[mCount - 1];
-		mColorsp[mCount] = mColorsp[mCount - 1];
+		mVertices[mCount] = mVertices[mCount - 1];
+		mTexCoords[mCount] = mTexCoords[mCount - 1];
+		mColors[mCount] = mColors[mCount - 1];
 	}
 }
 
 void LLRender::vertex2i(const GLint& x, const GLint& y)
 {
-	vertex3f((GLfloat) x, (GLfloat) y, 0);	
+	vertex3fui((GLfloat) x, (GLfloat) y, 0);	
 }
 
 void LLRender::vertex2f(const GLfloat& x, const GLfloat& y)
 { 
-	vertex3f(x,y,0);
+	vertex3fui(x,y,0);
 }
 
 void LLRender::vertex2fv(const GLfloat* v)
 { 
-	vertex3f(v[0], v[1], 0);
+	vertex3fui(v[0], v[1], 0);
 }
 
 void LLRender::vertex3fv(const GLfloat* v)
@@ -1928,7 +2011,7 @@ void LLRender::vertex3fv(const GLfloat* v)
 
 void LLRender::texCoord2f(const GLfloat& x, const GLfloat& y)
 { 
-	mTexcoordsp[mCount] = LLVector2(x,y);
+	mTexCoords[mCount] = LLVector2(x,y);
 }
 
 void LLRender::texCoord2i(const GLint& x, const GLint& y)
@@ -1946,7 +2029,7 @@ void LLRender::color4ub(const GLubyte& r, const GLubyte& g, const GLubyte& b, co
 	if (!LLGLSLShader::sCurBoundShaderPtr ||
 		LLGLSLShader::sCurBoundShaderPtr->mAttributeMask & LLVertexBuffer::MAP_COLOR)
 	{
-		mColorsp[mCount] = LLColor4U(r,g,b,a);
+		mColors[mCount] = LLColor4U(r,g,b,a);
 	}
 	else
 	{ //not using shaders or shader reads color from a uniform

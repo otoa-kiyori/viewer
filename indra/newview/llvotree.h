@@ -77,11 +77,11 @@ public:
 
 	void updateMesh();
 
-	void appendMesh(LLStrider<LLVector3>& vertices, 
-						 LLStrider<LLVector3>& normals, 
-						 LLStrider<LLVector2>& tex_coords,
-                         LLStrider<LLColor4U>& colors,
-						 LLStrider<U16>& indices,
+	void appendMesh(LLVector4a*& vertices,
+                         LLVector4a*& normals,
+                         LLVector2*& tex_coords,
+                         LLColor4U*& colors,
+                         U16*& indices,
 						 U16& idx_offset,
 						 LLMatrix4& matrix,
 						 LLMatrix4& norm_mat,
@@ -90,22 +90,21 @@ public:
 						 S32 index_count,
 						 S32 index_offset);
 
-	void genBranchPipeline(LLStrider<LLVector3>& vertices, 
-								 LLStrider<LLVector3>& normals, 
-								 LLStrider<LLVector2>& tex_coords, 
-                                 LLStrider<LLColor4U>& colors,
-								 LLStrider<U16>& indices,
-								 U16& index_offset,
-								 LLMatrix4& matrix, 
-								 S32 trunk_LOD, 
-								 S32 stop_level, 
-								 U16 depth, 
-								 U16 trunk_depth,  
-								 F32 scale, 
-								 F32 twist, 
-								 F32 droop,  
-								 F32 branches, 
-								 F32 alpha); 
+    void genBranchPipeline( LLVector4a*& vertices,
+                            LLVector4a*& normals,
+                            LLVector2*& tex_coords,
+                            LLColor4U*& colors,
+                            U16*& indices, U16& index_offset,
+						    LLMatrix4& matrix, 
+						    S32 trunk_LOD, 
+						    S32 stop_level, 
+						    U16 depth, 
+						    U16 trunk_depth,  
+						    F32 scale, 
+						    F32 twist, 
+						    F32 droop,  
+						    F32 branches, 
+						    F32 alpha); 
 
 	 /*virtual*/ BOOL lineSegmentIntersect(const LLVector4a& start, const LLVector4a& end, 
 										  S32 face = -1,                        // which face to check, -1 = ALL_SIDES

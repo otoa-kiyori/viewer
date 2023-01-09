@@ -51,7 +51,16 @@ const F32 MIN_TEXTURE_LIFETIME = 10.f;
 
 //which power of 2 is i?
 //assumes i is a power of 2 > 0
-U32 wpo2(U32 i);
+U32 wpo2(U32 i)
+{
+    llassert(i > 0);
+
+    U32 r = 0;
+
+    while (i >>= 1) ++r;
+
+    return r;
+}
 
 
 // texture memory accounting (for OS X)
@@ -132,7 +141,7 @@ bool LLImageGL::sCompressTextures = false;
 std::set<LLImageGL*> LLImageGL::sImageList;
 
 
-bool LLImageGLThread::sEnabled = false;
+bool LLGLThread::sEnabled = false;
 
 //****************************************************************************************************
 //The below for texture auditing use only
@@ -2402,9 +2411,9 @@ void LLImageGL::checkActiveThread()
 		glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAX_LEVEL,  nummips);
 */  
 
-LLImageGLThread::LLImageGLThread(LLWindow* window)
+LLGLThread::LLGLThread(LLWindow* window, const std::string& name)
     // We want exactly one thread.
-    : LL::ThreadPool("LLImageGL", 1)
+    : LL::ThreadPool(name, 1)
     , mWindow(window)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
@@ -2415,7 +2424,7 @@ LLImageGLThread::LLImageGLThread(LLWindow* window)
     LL::ThreadPool::start();
 }
 
-void LLImageGLThread::run()
+void LLGLThread::run()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_TEXTURE;
     // We must perform setup on this thread before actually servicing our
@@ -2425,5 +2434,13 @@ void LLImageGLThread::run()
     LL::ThreadPool::run();
     gGL.shutdown();
     mWindow->destroySharedContext(mContext);
+}
+
+
+LLImageGLThread::LLImageGLThread(LLWindow* window)
+// We want exactly one thread.
+    : LLGLThread(window, "LLImageGL")
+{
+
 }
 

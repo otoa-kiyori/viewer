@@ -538,7 +538,7 @@ BOOL LLVOTree::updateGeometry(LLDrawable *drawable)
 			max_vertices += sLODVertexCount[lod];
 		}
 
-		mReferenceBuffer = new LLVertexBuffer(LLDrawPoolTree::VERTEX_DATA_MASK, 0);
+		mReferenceBuffer = new LLVertexBuffer(LLDrawPoolTree::VERTEX_DATA_MASK, GL_STREAM_DRAW);
 		if (!mReferenceBuffer->allocateBuffer(max_vertices, max_indices, TRUE))
 		{
 			LL_WARNS() << "Failed to allocate Vertex Buffer on update to "
@@ -548,43 +548,39 @@ BOOL LLVOTree::updateGeometry(LLDrawable *drawable)
 			return TRUE;
 		}
 
-		LLStrider<LLVector3> vertices;
-		LLStrider<LLVector3> normals;
-        LLStrider<LLColor4U> colors;
-		LLStrider<LLVector2> tex_coords;
-		LLStrider<U16> indicesp;
+        LLMappedVertexData md = mReferenceBuffer->mapVertexBuffer();
+        U16* indicesp = mReferenceBuffer->mapIndexBuffer();
 
-		mReferenceBuffer->getVertexStrider(vertices);
-		mReferenceBuffer->getNormalStrider(normals);
-		mReferenceBuffer->getTexCoord0Strider(tex_coords);
-        mReferenceBuffer->getColorStrider(colors);
-		mReferenceBuffer->getIndexStrider(indicesp);
-				
+        LLVector4a* vertices = md.mPosition;
+        LLVector4a* normals = md.mNormal;
+        LLColor4U* colors = md.mColor;
+        LLVector2* tex_coords = md.mTexCoord0;
+
 		S32 vertex_count = 0;
 		S32 index_count = 0;
 		
 		// First leaf
-		*(normals++) =		LLVector3(-SRR2, -SRR2, 0.f);
+		*(normals++) =		LLVector4a(-SRR2, -SRR2, 0.f);
 		*(tex_coords++) =	LLVector2(LEAF_LEFT, LEAF_BOTTOM);
-		*(vertices++) =		LLVector3(-0.5f*LEAF_WIDTH, 0.f, 0.f);
+		*(vertices++) =		LLVector4a(-0.5f*LEAF_WIDTH, 0.f, 0.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
-		*(normals++) =		LLVector3(SRR3, -SRR3, SRR3);
+		*(normals++) =		LLVector4a(SRR3, -SRR3, SRR3);
 		*(tex_coords++) =	LLVector2(LEAF_RIGHT, LEAF_TOP);
-		*(vertices++) =		LLVector3(0.5f*LEAF_WIDTH, 0.f, 1.f);
+		*(vertices++) =		LLVector4a(0.5f*LEAF_WIDTH, 0.f, 1.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
-		*(normals++) =		LLVector3(-SRR3, -SRR3, SRR3);
+		*(normals++) =		LLVector4a(-SRR3, -SRR3, SRR3);
 		*(tex_coords++) =	LLVector2(LEAF_LEFT, LEAF_TOP);
-		*(vertices++) =		LLVector3(-0.5f*LEAF_WIDTH, 0.f, 1.f);
+		*(vertices++) =		LLVector4a(-0.5f*LEAF_WIDTH, 0.f, 1.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
-		*(normals++) =		LLVector3(SRR2, -SRR2, 0.f);
+		*(normals++) =		LLVector4a(SRR2, -SRR2, 0.f);
 		*(tex_coords++) =	LLVector2(LEAF_RIGHT, LEAF_BOTTOM);
-		*(vertices++) =		LLVector3(0.5f*LEAF_WIDTH, 0.f, 0.f);
+		*(vertices++) =		LLVector4a(0.5f*LEAF_WIDTH, 0.f, 0.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
         
@@ -603,27 +599,27 @@ BOOL LLVOTree::updateGeometry(LLDrawable *drawable)
 		index_count++;
 
 		// Same leaf, inverse winding/normals
-		*(normals++) =		LLVector3(-SRR2, SRR2, 0.f);
+		*(normals++) =		LLVector4a(-SRR2, SRR2, 0.f);
 		*(tex_coords++) =	LLVector2(LEAF_LEFT, LEAF_BOTTOM);
-		*(vertices++) =		LLVector3(-0.5f*LEAF_WIDTH, 0.f, 0.f);
+		*(vertices++) =		LLVector4a(-0.5f*LEAF_WIDTH, 0.f, 0.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
-		*(normals++) =		LLVector3(SRR3, SRR3, SRR3);
+		*(normals++) =		LLVector4a(SRR3, SRR3, SRR3);
 		*(tex_coords++) =	LLVector2(LEAF_RIGHT, LEAF_TOP);
-		*(vertices++) =		LLVector3(0.5f*LEAF_WIDTH, 0.f, 1.f);
+		*(vertices++) =		LLVector4a(0.5f*LEAF_WIDTH, 0.f, 1.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
-		*(normals++) =		LLVector3(-SRR3, SRR3, SRR3);
+		*(normals++) =		LLVector4a(-SRR3, SRR3, SRR3);
 		*(tex_coords++) =	LLVector2(LEAF_LEFT, LEAF_TOP);
-		*(vertices++) =		LLVector3(-0.5f*LEAF_WIDTH, 0.f, 1.f);
+		*(vertices++) =		LLVector4a(-0.5f*LEAF_WIDTH, 0.f, 1.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
-		*(normals++) =		LLVector3(SRR2, SRR2, 0.f);
+		*(normals++) =		LLVector4a(SRR2, SRR2, 0.f);
 		*(tex_coords++) =	LLVector2(LEAF_RIGHT, LEAF_BOTTOM);
-		*(vertices++) =		LLVector3(0.5f*LEAF_WIDTH, 0.f, 0.f);
+		*(vertices++) =		LLVector4a(0.5f*LEAF_WIDTH, 0.f, 0.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
@@ -643,27 +639,27 @@ BOOL LLVOTree::updateGeometry(LLDrawable *drawable)
 
 
 		// next leaf
-		*(normals++) =		LLVector3(SRR2, -SRR2, 0.f);
+		*(normals++) =		LLVector4a(SRR2, -SRR2, 0.f);
 		*(tex_coords++) =	LLVector2(LEAF_LEFT, LEAF_BOTTOM);
-		*(vertices++) =		LLVector3(0.f, -0.5f*LEAF_WIDTH, 0.f);
+		*(vertices++) =		LLVector4a(0.f, -0.5f*LEAF_WIDTH, 0.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
-		*(normals++) =		LLVector3(SRR3, SRR3, SRR3);
+		*(normals++) =		LLVector4a(SRR3, SRR3, SRR3);
 		*(tex_coords++) =	LLVector2(LEAF_RIGHT, LEAF_TOP);
-		*(vertices++) =		LLVector3(0.f, 0.5f*LEAF_WIDTH, 1.f);
+		*(vertices++) =		LLVector4a(0.f, 0.5f*LEAF_WIDTH, 1.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
-		*(normals++) =		LLVector3(SRR3, -SRR3, SRR3);
+		*(normals++) =		LLVector4a(SRR3, -SRR3, SRR3);
 		*(tex_coords++) =	LLVector2(LEAF_LEFT, LEAF_TOP);
-		*(vertices++) =		LLVector3(0.f, -0.5f*LEAF_WIDTH, 1.f);
+		*(vertices++) =		LLVector4a(0.f, -0.5f*LEAF_WIDTH, 1.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
-		*(normals++) =		LLVector3(SRR2, SRR2, 0.f);
+		*(normals++) =		LLVector4a(SRR2, SRR2, 0.f);
 		*(tex_coords++) =	LLVector2(LEAF_RIGHT, LEAF_BOTTOM);
-		*(vertices++) =		LLVector3(0.f, 0.5f*LEAF_WIDTH, 0.f);
+		*(vertices++) =		LLVector4a(0.f, 0.5f*LEAF_WIDTH, 0.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
@@ -683,27 +679,27 @@ BOOL LLVOTree::updateGeometry(LLDrawable *drawable)
 
 
 		// other side of same leaf
-		*(normals++) =		LLVector3(-SRR2, -SRR2, 0.f);
+		*(normals++) =		LLVector4a(-SRR2, -SRR2, 0.f);
 		*(tex_coords++) =	LLVector2(LEAF_LEFT, LEAF_BOTTOM);
-		*(vertices++) =		LLVector3(0.f, -0.5f*LEAF_WIDTH, 0.f);
+		*(vertices++) =		LLVector4a(0.f, -0.5f*LEAF_WIDTH, 0.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
-		*(normals++) =		LLVector3(-SRR3, SRR3, SRR3);
+		*(normals++) =		LLVector4a(-SRR3, SRR3, SRR3);
 		*(tex_coords++) =	LLVector2(LEAF_RIGHT, LEAF_TOP);
-		*(vertices++) =		LLVector3(0.f, 0.5f*LEAF_WIDTH, 1.f);
+		*(vertices++) =		LLVector4a(0.f, 0.5f*LEAF_WIDTH, 1.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
-		*(normals++) =		LLVector3(-SRR3, -SRR3, SRR3);
+		*(normals++) =		LLVector4a(-SRR3, -SRR3, SRR3);
 		*(tex_coords++) =	LLVector2(LEAF_LEFT, LEAF_TOP);
-		*(vertices++) =		LLVector3(0.f, -0.5f*LEAF_WIDTH, 1.f);
+		*(vertices++) =		LLVector4a(0.f, -0.5f*LEAF_WIDTH, 1.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
-		*(normals++) =		LLVector3(-SRR2, SRR2, 0.f);
+		*(normals++) =		LLVector4a(-SRR2, SRR2, 0.f);
 		*(tex_coords++) =	LLVector2(LEAF_RIGHT, LEAF_BOTTOM);
-		*(vertices++) =		LLVector3(0.f, 0.5f*LEAF_WIDTH, 0.f);
+		*(vertices++) =		LLVector4a(0.f, 0.5f*LEAF_WIDTH, 0.f);
         *(colors++) =       LLColor4U::white;
 		vertex_count++;
 
@@ -814,8 +810,8 @@ BOOL LLVOTree::updateGeometry(LLDrawable *drawable)
 						tc = LLVector2((angle/360.f)*0.5f, (1.f - z/2.f)*tex_z_repeat);
 					}
 
-					*(vertices++) =		LLVector3(x1*radius, y1*radius, z);
-					*(normals++) =		LLVector3(x1, y1, 0.f);
+					*(vertices++) =		LLVector4a(x1*radius, y1*radius, z);
+					*(normals++) =		LLVector4a(x1, y1, 0.f);
 					*(tex_coords++) = tc;
                     *(colors++) =       LLColor4U::white;
 					vertex_count++;
@@ -862,7 +858,8 @@ BOOL LLVOTree::updateGeometry(LLDrawable *drawable)
 			slices /= 2; 
 		}
 
-		mReferenceBuffer->flush();
+        mReferenceBuffer->unmapIndexBuffer();
+        mReferenceBuffer->unmapVertexBuffer();
 		llassert(vertex_count == max_vertices);
 		llassert(index_count == max_indices);
 	}
@@ -922,47 +919,30 @@ void LLVOTree::updateMesh()
 	LLFace* facep = mDrawable->getFace(0);
 	if (!facep) return;
 	LLVertexBuffer* buff = new LLVertexBuffer(LLDrawPoolTree::VERTEX_DATA_MASK, GL_STATIC_DRAW);
-	if (!buff->allocateBuffer(vert_count, index_count, TRUE))
-	{
-		LL_WARNS() << "Failed to allocate Vertex Buffer on mesh update to "
-			<< vert_count << " vertices and "
-			<< index_count << " indices" << LL_ENDL;
-		buff->allocateBuffer(1, 3, true);
-		memset((U8*)buff->getMappedData(), 0, buff->getSize());
-		memset((U8*)buff->getMappedIndices(), 0, buff->getIndicesSize());
-		facep->setSize(1, 3);
-		facep->setVertexBuffer(buff);
-		mReferenceBuffer->flush();
-		buff->flush();
-		return;
-	}
-
+    buff->allocateBuffer(vert_count, index_count, TRUE);
 	facep->setVertexBuffer(buff);
 	
-	LLStrider<LLVector3> vertices;
-	LLStrider<LLVector3> normals;
-	LLStrider<LLVector2> tex_coords;
-    LLStrider<LLColor4U> colors;
-	LLStrider<U16> indices;
-	U16 idx_offset = 0;
+    LLMappedVertexData md = buff->mapVertexBuffer();
+    U16* indices = buff->mapIndexBuffer();
 
-	buff->getVertexStrider(vertices);
-	buff->getNormalStrider(normals);
-	buff->getTexCoord0Strider(tex_coords);
-    buff->getColorStrider(colors);
-	buff->getIndexStrider(indices);
+	LLVector4a* vertices = md.mPosition;
+	LLVector4a* normals = md.mNormal;
+	LLVector2* tex_coords = md.mTexCoord0;
+    LLColor4U* colors = md.mColor;
+	
+	U16 idx_offset = 0;
 
 	genBranchPipeline(vertices, normals, tex_coords, colors, indices, idx_offset, scale_mat, mTrunkLOD, stop_depth, mDepth, mTrunkDepth, 1.0, mTwist, droop, mBranches, alpha);
 	
-	mReferenceBuffer->flush();
-	buff->flush();
+    buff->unmapIndexBuffer();
+    buff->unmapVertexBuffer();
 }
 
-void LLVOTree::appendMesh(LLStrider<LLVector3>& vertices, 
-						 LLStrider<LLVector3>& normals, 
-						 LLStrider<LLVector2>& tex_coords, 
-                         LLStrider<LLColor4U>& colors, 
-						 LLStrider<U16>& indices,
+void LLVOTree::appendMesh(LLVector4a*& vertices,
+                         LLVector4a*& normals,
+                         LLVector2*& tex_coords,
+                         LLColor4U*& colors,
+                         U16*& indices,
 						 U16& cur_idx,
 						 LLMatrix4& matrix,
 						 LLMatrix4& norm_mat,
@@ -971,26 +951,24 @@ void LLVOTree::appendMesh(LLStrider<LLVector3>& vertices,
 						 S32 index_count,
 						 S32 index_offset)
 {
-	LLStrider<LLVector3> v;
-	LLStrider<LLVector3> n;
-	LLStrider<LLVector2> t;
-    LLStrider<LLColor4U> c;
-	LLStrider<U16> idx;
+    
+    LLMappedVertexData md = mReferenceBuffer->mapVertexBuffer();
+    U16* idx = mReferenceBuffer->mapIndexBuffer();
 
-	mReferenceBuffer->getVertexStrider(v);
-	mReferenceBuffer->getNormalStrider(n);
-	mReferenceBuffer->getTexCoord0Strider(t);
-    mReferenceBuffer->getColorStrider(c);
-	mReferenceBuffer->getIndexStrider(idx);
+	LLVector4a* v = md.mPosition;
+	LLVector4a* n = md.mNormal;
+	LLVector2* t = md.mTexCoord0;
+    LLColor4U* c = md.mColor;
 	
+    LLMatrix4a m(matrix);
+    LLMatrix4a nm(matrix);
+
 	//copy/transform vertices into mesh - check
 	for (S32 i = 0; i < vert_count; i++)
 	{ 
 		U16 index = vert_start + i;
-		*vertices++ = v[index] * matrix;
-		LLVector3 norm = n[index] * norm_mat;
-		norm.normalize();
-		*normals++ = norm;
+        m.affineTransform(v[index], *vertices++);
+        nm.affineTransform(n[index], *normals++);
 		*tex_coords++ = t[index];
         *colors++ = c[index];
 	}
@@ -1007,11 +985,11 @@ void LLVOTree::appendMesh(LLStrider<LLVector3>& vertices,
 }
 								 
 
-void LLVOTree::genBranchPipeline(LLStrider<LLVector3>& vertices, 
-								 LLStrider<LLVector3>& normals, 
-								 LLStrider<LLVector2>& tex_coords, 
-                                 LLStrider<LLColor4U>& colors,
-								 LLStrider<U16>& indices,
+void LLVOTree::genBranchPipeline(LLVector4a*& vertices, 
+                                 LLVector4a*& normals,
+								 LLVector2*& tex_coords, 
+                                 LLColor4U*& colors,
+								 U16*& indices,
 								 U16& index_offset,
 								 LLMatrix4& matrix, 
 								 S32 trunk_LOD, 

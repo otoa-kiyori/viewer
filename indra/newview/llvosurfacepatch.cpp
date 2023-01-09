@@ -47,24 +47,6 @@ F32 LLVOSurfacePatch::sLODFactor = 1.f;
 
 //============================================================================
 
-class LLVertexBufferTerrain : public LLVertexBuffer
-{
-public:
-	LLVertexBufferTerrain() :
-		LLVertexBuffer(MAP_VERTEX | MAP_NORMAL | MAP_TEXCOORD0 | MAP_TEXCOORD1 | MAP_COLOR, GL_DYNAMIC_DRAW)
-	{
-		//texture coordinates 2 and 3 exist, but use the same data as texture coordinate 1
-	};
-
-	// virtual
-	void setupVertexBuffer(U32 data_mask)
-	{	
-		LLVertexBuffer::setupVertexBuffer(data_mask & ~(MAP_TEXCOORD2 | MAP_TEXCOORD3));
-	}
-};
-
-//============================================================================
-
 LLVOSurfacePatch::LLVOSurfacePatch(const LLUUID &id, const LLPCode pcode, LLViewerRegion *regionp)
 	:	LLStaticViewerObject(id, pcode, regionp),
 		mDirtiedPatch(FALSE),
@@ -261,11 +243,11 @@ BOOL LLVOSurfacePatch::updateLOD()
 	return TRUE;
 }
 
-void LLVOSurfacePatch::getGeometry(LLStrider<LLVector3> &verticesp,
-								LLStrider<LLVector3> &normalsp,
-								LLStrider<LLVector2> &texCoords0p,
-								LLStrider<LLVector2> &texCoords1p,
-								LLStrider<U16> &indicesp)
+void LLVOSurfacePatch::getGeometry(LLVector4a* &verticesp,
+								LLVector4a* &normalsp,
+								LLVector2* &texCoords0p,
+								LLVector2* &texCoords1p,
+								U16* &indicesp)
 {
 	LLFace* facep = mDrawable->getFace(0);
 	if (facep)
@@ -297,11 +279,11 @@ void LLVOSurfacePatch::getGeometry(LLStrider<LLVector3> &verticesp,
 }
 
 void LLVOSurfacePatch::updateMainGeometry(LLFace *facep,
-										LLStrider<LLVector3> &verticesp,
-										LLStrider<LLVector3> &normalsp,
-										LLStrider<LLVector2> &texCoords0p,
-										LLStrider<LLVector2> &texCoords1p,
-										LLStrider<U16> &indicesp,
+										LLVector4a* &verticesp,
+										LLVector4a* &normalsp,
+										LLVector2* &texCoords0p,
+										LLVector2* &texCoords1p,
+										U16* &indicesp,
 										U32 &index_offset)
 {
 	S32 i, j, x, y;
@@ -338,7 +320,7 @@ void LLVOSurfacePatch::updateMainGeometry(LLFace *facep,
 			{
 				x = i * render_stride;
 				y = j * render_stride;
-				mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+				mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 				verticesp++;
 				normalsp++;
 				texCoords0p++;
@@ -401,11 +383,11 @@ void LLVOSurfacePatch::updateMainGeometry(LLFace *facep,
 
 
 void LLVOSurfacePatch::updateNorthGeometry(LLFace *facep,
-										LLStrider<LLVector3> &verticesp,
-										LLStrider<LLVector3> &normalsp,
-										LLStrider<LLVector2> &texCoords0p,
-										LLStrider<LLVector2> &texCoords1p,
-										LLStrider<U16> &indicesp,
+										LLVector4a* &verticesp,
+										LLVector4a* &normalsp,
+										LLVector2* &texCoords0p,
+										LLVector2* &texCoords1p,
+										U16* &indicesp,
 										U32 &index_offset)
 {
 	S32 vertex_count = 0;
@@ -438,7 +420,7 @@ void LLVOSurfacePatch::updateNorthGeometry(LLFace *facep,
 			x = i * render_stride;
 			y = 16 - render_stride;
 
-			mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+			mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 			verticesp++;
 			normalsp++;
 			texCoords0p++;
@@ -451,7 +433,7 @@ void LLVOSurfacePatch::updateNorthGeometry(LLFace *facep,
 		{
 			x = i * render_stride;
 			y = 16;
-			mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+			mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 			verticesp++;
 			normalsp++;
 			texCoords0p++;
@@ -488,7 +470,7 @@ void LLVOSurfacePatch::updateNorthGeometry(LLFace *facep,
 			x = i * render_stride;
 			y = 16 - render_stride;
 
-			mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+			mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 			verticesp++;
 			normalsp++;
 			texCoords0p++;
@@ -502,7 +484,7 @@ void LLVOSurfacePatch::updateNorthGeometry(LLFace *facep,
 			x = i * render_stride;
 			y = 16;
 
-			mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+			mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 			verticesp++;
 			normalsp++;
 			texCoords0p++;
@@ -546,7 +528,7 @@ void LLVOSurfacePatch::updateNorthGeometry(LLFace *facep,
 			x = i * north_stride;
 			y = 16 - render_stride;
 
-			mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+			mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 			verticesp++;
 			normalsp++;
 			texCoords0p++;
@@ -560,7 +542,7 @@ void LLVOSurfacePatch::updateNorthGeometry(LLFace *facep,
 			x = i * north_stride;
 			y = 16;
 
-			mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+			mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 			verticesp++;
 			normalsp++;
 			texCoords0p++;
@@ -598,11 +580,11 @@ void LLVOSurfacePatch::updateNorthGeometry(LLFace *facep,
 }
 
 void LLVOSurfacePatch::updateEastGeometry(LLFace *facep,
-										  LLStrider<LLVector3> &verticesp,
-										  LLStrider<LLVector3> &normalsp,
-										  LLStrider<LLVector2> &texCoords0p,
-										  LLStrider<LLVector2> &texCoords1p,
-										  LLStrider<U16> &indicesp,
+										  LLVector4a* &verticesp,
+										  LLVector4a* &normalsp,
+										  LLVector2* &texCoords0p,
+										  LLVector2* &texCoords1p,
+										  U16* &indicesp,
 										  U32 &index_offset)
 {
 	S32 i, x, y;
@@ -629,7 +611,7 @@ void LLVOSurfacePatch::updateEastGeometry(LLFace *facep,
 			x = 16 - render_stride;
 			y = i * render_stride;
 
-			mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+			mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 			verticesp++;
 			normalsp++;
 			texCoords0p++;
@@ -641,7 +623,7 @@ void LLVOSurfacePatch::updateEastGeometry(LLFace *facep,
 		{
 			x = 16;
 			y = i * render_stride;
-			mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+			mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 			verticesp++;
 			normalsp++;
 			texCoords0p++;
@@ -677,7 +659,7 @@ void LLVOSurfacePatch::updateEastGeometry(LLFace *facep,
 			x = 16 - render_stride;
 			y = i * render_stride;
 
-			mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+			mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 			verticesp++;
 			normalsp++;
 			texCoords0p++;
@@ -689,7 +671,7 @@ void LLVOSurfacePatch::updateEastGeometry(LLFace *facep,
 			x = 16;
 			y = i * render_stride;
 
-			mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+			mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 			verticesp++;
 			normalsp++;
 			texCoords0p++;
@@ -731,7 +713,7 @@ void LLVOSurfacePatch::updateEastGeometry(LLFace *facep,
 			x = 16 - render_stride;
 			y = i * east_stride;
 
-			mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+			mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 			verticesp++;
 			normalsp++;
 			texCoords0p++;
@@ -743,7 +725,7 @@ void LLVOSurfacePatch::updateEastGeometry(LLFace *facep,
 			x = 16;
 			y = i * east_stride;
 
-			mPatchp->eval(x, y, render_stride, verticesp.get(), normalsp.get(), texCoords0p.get(), texCoords1p.get());
+			mPatchp->eval(x, y, render_stride, verticesp, normalsp, texCoords0p, texCoords1p);
 			verticesp++;
 			normalsp++;
 			texCoords0p++;
@@ -1001,17 +983,12 @@ U32 LLVOSurfacePatch::getPartitionType() const
 }
 
 LLTerrainPartition::LLTerrainPartition(LLViewerRegion* regionp)
-: LLSpatialPartition(LLDrawPoolTerrain::VERTEX_DATA_MASK, FALSE, GL_DYNAMIC_DRAW, regionp)
+: LLSpatialPartition(LLDrawPoolTerrain::VERTEX_DATA_MASK, FALSE, GL_STATIC_DRAW, regionp)
 {
 	mOcclusionEnabled = FALSE;
 	mInfiniteFarClip = TRUE;
 	mDrawableType = LLPipeline::RENDER_TYPE_TERRAIN;
 	mPartitionType = LLViewerRegion::PARTITION_TERRAIN;
-}
-
-LLVertexBuffer* LLTerrainPartition::createVertexBuffer(U32 type_mask, U32 usage)
-{
-	return new LLVertexBufferTerrain();
 }
 
 void LLTerrainPartition::getGeometry(LLSpatialGroup* group)
@@ -1020,18 +997,13 @@ void LLTerrainPartition::getGeometry(LLSpatialGroup* group)
 
 	LLVertexBuffer* buffer = group->mVertexBuffer;
 
-	//get vertex buffer striders
-	LLStrider<LLVector3> vertices;
-	LLStrider<LLVector3> normals;
-	LLStrider<LLVector2> texcoords2;
-	LLStrider<LLVector2> texcoords;
-	LLStrider<U16> indices;
+    LLMappedVertexData md = buffer->mapVertexBuffer();
+    U16* indices = buffer->mapIndexBuffer();
 
-	llassert_always(buffer->getVertexStrider(vertices));
-	llassert_always(buffer->getNormalStrider(normals));
-	llassert_always(buffer->getTexCoord0Strider(texcoords));
-	llassert_always(buffer->getTexCoord1Strider(texcoords2));
-	llassert_always(buffer->getIndexStrider(indices));
+    LLVector4a* vertices = md.mPosition;
+    LLVector4a* normals = md.mNormal;
+    LLVector2* texcoords0 = md.mTexCoord0;
+    LLVector2* texcoords1 = md.mTexCoord1;
 
 	U32 indices_index = 0;
 	U32 index_offset = 0;
@@ -1045,13 +1017,14 @@ void LLTerrainPartition::getGeometry(LLSpatialGroup* group)
 		facep->setVertexBuffer(buffer);
 
 		LLVOSurfacePatch* patchp = (LLVOSurfacePatch*) facep->getViewerObject();
-		patchp->getGeometry(vertices, normals, texcoords, texcoords2, indices);
+		patchp->getGeometry(vertices, normals, texcoords0, texcoords1, indices);
 
 		indices_index += facep->getIndicesCount();
 		index_offset += facep->getGeomCount();
 	}
 
-	buffer->flush();
+    buffer->unmapIndexBuffer();
+    buffer->unmapVertexBuffer();
 	mFaceList.clear();
 }
 

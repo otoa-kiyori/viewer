@@ -109,27 +109,27 @@ LLVertexBuffer* ll_create_cube_vb(U32 type_mask, U32 usage)
 
 	ret->allocateBuffer(8, 64, true);
 
-	LLStrider<LLVector3> pos;
-	LLStrider<U16> idx;
+    LLMappedVertexData md = ret->mapVertexBuffer();
+    LLVector4a* pos = md.mPosition;
 
-	ret->getVertexStrider(pos);
-	ret->getIndexStrider(idx);
+    U16* idx = ret->mapIndexBuffer();
 
-	pos[0] = LLVector3(-1,-1,-1);
-	pos[1] = LLVector3(-1,-1, 1);
-	pos[2] = LLVector3(-1, 1,-1);
-	pos[3] = LLVector3(-1, 1, 1);
-	pos[4] = LLVector3( 1,-1,-1);
-	pos[5] = LLVector3( 1,-1, 1);
-	pos[6] = LLVector3( 1, 1,-1);
-	pos[7] = LLVector3( 1, 1, 1);
+	pos[0].set(-1,-1,-1);
+	pos[1].set(-1,-1, 1);
+	pos[2].set(-1, 1,-1);
+	pos[3].set(-1, 1, 1);
+	pos[4].set( 1,-1,-1);
+	pos[5].set( 1,-1, 1);
+	pos[6].set( 1, 1,-1);
+	pos[7].set( 1, 1, 1);
 
 	for (U32 i = 0; i < 64; i++)
 	{
 		idx[i] = sOcclusionIndices[i];
 	}
 
-	ret->flush();
+    ret->unmapVertexBuffer();
+    ret->unmapIndexBuffer();
 
 	return ret;
 }

@@ -167,13 +167,13 @@ public:
 	static void finishProfile(bool emit_report = true);
 
 	static void startProfile();
-	static void stopProfile(U32 count, U32 mode);
+	static void stopProfile();
 
 	void unload();
 	void clearStats();
 	void dumpStats();
 	void placeProfileQuery();
-	void readProfileQuery(U32 count, U32 mode);
+	void readProfileQuery();
 
 	BOOL createShader(std::vector<LLStaticHashedString> * attributes,
 						std::vector<LLStaticHashedString> * uniforms,
@@ -291,21 +291,19 @@ public:
     typedef std::unordered_map<std::string, std::string> defines_map_t;
 	defines_map_t mDefines;
 
-	//statistcis for profiling shader performance
+	//statistics for profiling shader performance
 	U32 mTimerQuery;
 	U32 mSamplesQuery;
+    U32 mPrimitivesQuery;
+
 	U64 mTimeElapsed;
 	static U64 sTotalTimeElapsed;
 	U32 mTrianglesDrawn;
 	static U32 sTotalTrianglesDrawn;
 	U64 mSamplesDrawn;
 	static U64 sTotalSamplesDrawn;
-	U32 mDrawCalls;
-	static U32 sTotalDrawCalls;
-
-	bool mTextureStateFetched;
-	std::vector<U32> mTextureMagFilter;
-	std::vector<U32> mTextureMinFilter;
+	U32 mBinds;
+	static U32 sTotalBinds;
 
     // this pointer should be set to whichever shader represents this shader's rigged variant
     LLGLSLShader* mRiggedVariant = nullptr;

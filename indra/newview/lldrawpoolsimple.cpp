@@ -288,6 +288,7 @@ S32 LLDrawPoolSimple::getNumDeferredPasses()
 void LLDrawPoolSimple::renderDeferred(S32 pass)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL; //LL_RECORD_BLOCK_TIME(FTM_RENDER_SIMPLE_DEFERRED);
+    LL_PROFILE_GPU_ZONE("deferred simple");
 	LLGLDisable blend(GL_BLEND);
 	LLGLDisable alpha_test(GL_ALPHA_TEST);
 
@@ -306,6 +307,7 @@ static LLTrace::BlockTimerStatHandle FTM_RENDER_ALPHA_MASK_DEFERRED("Deferred Al
 void LLDrawPoolAlphaMask::renderDeferred(S32 pass)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL; //LL_RECORD_BLOCK_TIME(FTM_RENDER_ALPHA_MASK_DEFERRED);
+    LL_PROFILE_GPU_ZONE("deferred alpha mask");
     LLGLSLShader* shader = &gDeferredDiffuseAlphaMaskProgram;
 
     //render static
@@ -406,6 +408,7 @@ void LLDrawPoolGrass::endDeferredPass(S32 pass)
 void LLDrawPoolGrass::renderDeferred(S32 pass)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL;
+    LL_PROFILE_GPU_ZONE("deferred grass");
 	{
 		//LL_RECORD_BLOCK_TIME(FTM_RENDER_GRASS_DEFERRED);
 		gDeferredNonIndexedDiffuseAlphaMaskProgram.bind();

@@ -67,6 +67,5 @@ void main()
          c.rgb  = scaleSoftClip(c.rgb);
 
     frag_color = vec4(c.rgb, c.a);
-    gl_FragDepth = LL_SHADER_CONST_CLOUD_MOON_DEPTH; // SL-14113
 }
 

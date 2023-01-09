@@ -403,12 +403,8 @@ void LLDrawPoolAlpha::renderAlphaHighlight(U32 mask)
                     }
 
                     LLRenderPass::applyModelMatrix(params);
-                    if (params.mGroup)
-                    {
-                        params.mGroup->rebuildMesh();
-                    }
-                    params.mVertexBuffer->setBufferFast(rigged ? mask | LLVertexBuffer::MAP_WEIGHT4 : mask);
-                    params.mVertexBuffer->drawRangeFast(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+                    params.mVertexBuffer->setBuffer(rigged ? mask | LLVertexBuffer::MAP_WEIGHT4 : mask);
+                    params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
                 }
             }
         }
@@ -435,9 +431,9 @@ inline bool IsEmissive(LLDrawInfo& params)
 
 inline void Draw(LLDrawInfo* draw, U32 mask)
 {
-    draw->mVertexBuffer->setBufferFast(mask);
+    draw->mVertexBuffer->setBuffer(mask);
     LLRenderPass::applyModelMatrix(*draw);
-	draw->mVertexBuffer->drawRangeFast(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);                    
+	draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);                    
 }
 
 bool LLDrawPoolAlpha::TexSetup(LLDrawInfo* draw, bool use_material)
@@ -530,8 +526,8 @@ void LLDrawPoolAlpha::RestoreTexSetup(bool tex_setup)
 void LLDrawPoolAlpha::drawEmissive(U32 mask, LLDrawInfo* draw)
 {
     LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::EMISSIVE_BRIGHTNESS, 1.f);
-    draw->mVertexBuffer->setBufferFast((mask & ~LLVertexBuffer::MAP_COLOR) | LLVertexBuffer::MAP_EMISSIVE);
-	draw->mVertexBuffer->drawRangeFast(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
+    draw->mVertexBuffer->setBuffer((mask & ~LLVertexBuffer::MAP_COLOR) | LLVertexBuffer::MAP_EMISSIVE);
+	draw->mVertexBuffer->drawRange(LLRender::TRIANGLES, draw->mStart, draw->mEnd, draw->mCount, draw->mOffset);
 }
 
 
@@ -769,11 +765,6 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged)
                     }
                 }
 
-				//if (params.mGroup) // TOO LATE
-				//{
-				//	params.mGroup->rebuildMesh();
-				//}
-
                 if (params.mAvatar != nullptr)
                 {
                     if (lastAvatar != params.mAvatar ||
@@ -816,8 +807,8 @@ void LLDrawPoolAlpha::renderAlpha(U32 mask, bool depth_only, bool rigged)
                         drawMask |= LLVertexBuffer::MAP_WEIGHT4;
                     }
 
-                    params.mVertexBuffer->setBufferFast(drawMask);
-                    params.mVertexBuffer->drawRangeFast(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+                    params.mVertexBuffer->setBuffer(drawMask);
+                    params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
                     if (reset_minimum_alpha)
                     {

@@ -35,9 +35,6 @@ ATTRIBUTE vec2 texcoord0;
 mat4 getObjectSkinnedTransform();
 void passTextureIndex();
 
-#if !defined(DEPTH_CLAMP)
-VARYING vec4 post_pos;
-#endif
 VARYING vec2 vary_texcoord0;
 VARYING float pos_w;
 VARYING float target_pos_x;
@@ -61,13 +58,7 @@ void main()
 
 	vertex_color = diffuse_color;
 
-#if !defined(DEPTH_CLAMP)
-	p.z = max(p.z, -p.w+0.01);
-    post_pos = p;
 	gl_Position = p;
-#else
-	gl_Position = p;
-#endif
 
 	passTextureIndex();
 }

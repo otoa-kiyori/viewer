@@ -275,14 +275,6 @@ void LLSpatialGroup::rebuildGeom()
 	}
 }
 
-void LLSpatialGroup::rebuildMesh()
-{
-	if (!isDead())
-	{
-		getSpatialPartition()->rebuildMesh(this);
-	}
-}
-
 void LLSpatialPartition::rebuildGeom(LLSpatialGroup* group)
 {
 	if (group->isDead() || !group->hasState(LLSpatialGroup::GEOM_DIRTY))
@@ -308,35 +300,16 @@ void LLSpatialPartition::rebuildGeom(LLSpatialGroup* group)
 	
 	if (vertex_count > 0 && index_count > 0)
 	{ //create vertex buffer containing volume geometry for this node
+		
+		group->mBuilt = 1.f;
+		group->mVertexBuffer = createVertexBuffer(mVertexDataMask, group->mBufferUsage);
+		if (!group->mVertexBuffer->allocateBuffer(vertex_count, index_count, true))
 		{
-
-			group->mBuilt = 1.f;
-			if (group->mVertexBuffer.isNull() ||
-				!group->mVertexBuffer->isWriteable() ||
-				(group->mBufferUsage != group->mVertexBuffer->getUsage() && LLVertexBuffer::sEnableVBOs))
-			{
-				group->mVertexBuffer = createVertexBuffer(mVertexDataMask, group->mBufferUsage);
-				if (!group->mVertexBuffer->allocateBuffer(vertex_count, index_count, true))
-				{
-					LL_WARNS() << "Failed to allocate Vertex Buffer on rebuild to "
-						<< vertex_count << " vertices and "
-						<< index_count << " indices" << LL_ENDL;
-					group->mVertexBuffer = NULL;
-					group->mBufferMap.clear();
-				}
-			}
-			else
-			{
-				if (!group->mVertexBuffer->resizeBuffer(vertex_count, index_count))
-				{
-					// Is likely to cause a crash. If this gets triggered find a way to avoid it (don't forget to reset face)
-					LL_WARNS() << "Failed to resize Vertex Buffer on rebuild to "
-						<< vertex_count << " vertices and "
-						<< index_count << " indices" << LL_ENDL;
-					group->mVertexBuffer = NULL;
-					group->mBufferMap.clear();
-				}
-			}
+			LL_WARNS() << "Failed to allocate Vertex Buffer on rebuild to "
+				<< vertex_count << " vertices and "
+				<< index_count << " indices" << LL_ENDL;
+			group->mVertexBuffer = NULL;
+			group->mBufferMap.clear();
 		}
 
 		if (group->mVertexBuffer)
@@ -352,12 +325,6 @@ void LLSpatialPartition::rebuildGeom(LLSpatialGroup* group)
 
 	group->mLastUpdateTime = gFrameTimeSeconds;
 	group->clearState(LLSpatialGroup::GEOM_DIRTY);
-}
-
-
-void LLSpatialPartition::rebuildMesh(LLSpatialGroup* group)
-{
-
 }
 
 LLSpatialGroup* LLSpatialGroup::getParent()
@@ -1577,6 +1544,7 @@ void pushVertsColorCoded(LLSpatialGroup* group, U32 mask)
 //  - a linked rigged drawable face has the wrong draw order index
 bool check_rigged_group(LLDrawable* drawable)
 {
+#if 0
     if (drawable->isState(LLDrawable::RIGGED))
     {
         LLSpatialGroup* group = drawable->getSpatialGroup();
@@ -1624,7 +1592,7 @@ bool check_rigged_group(LLDrawable* drawable)
             }
         }
     }
-
+#endif
     return true;
 }
 
@@ -1708,13 +1676,29 @@ void renderOctree(LLSpatialGroup* group)
 					LLFace* face = drawable->getFace(j);
 					if (face && face->getVertexBuffer())
 					{
+                        LLVOVolume* vol = drawable->getVOVolume();
+
 						if (gFrameTimeSeconds - face->mLastUpdateTime < 0.5f)
 						{
-							gGL.diffuseColor4f(0, 1, 0, group->mBuilt);
+                            if (vol && vol->isShrinkWrapped())
+                            {
+                                gGL.diffuseColor4f(0, 1, 1, group->mBuilt);
+                            }
+                            else
+                            {
+                                gGL.diffuseColor4f(0, 1, 0, group->mBuilt);
+                            }
 						}
 						else if (gFrameTimeSeconds - face->mLastMoveTime < 0.5f)
 						{
-							gGL.diffuseColor4f(1, 0, 0, group->mBuilt);
+                            if (vol && vol->isShrinkWrapped())
+                            {
+                                gGL.diffuseColor4f(1, 1, 0, group->mBuilt);
+                            }
+                            else
+                            {
+                                gGL.diffuseColor4f(1, 0, 0, group->mBuilt);
+                            }
 						}
 						else
 						{
@@ -2872,42 +2856,6 @@ void renderBatchSize(LLDrawInfo* params)
     }
 }
 
-void renderShadowFrusta(LLDrawInfo* params)
-{
-	LLGLEnable blend(GL_BLEND);
-	gGL.setSceneBlendType(LLRender::BT_ADD);
-
-	LLVector4a center;
-	center.setAdd(params->mExtents[1], params->mExtents[0]);
-	center.mul(0.5f);
-	LLVector4a size;
-	size.setSub(params->mExtents[1],params->mExtents[0]);
-	size.mul(0.5f);
-
-	if (gPipeline.mShadowCamera[4].AABBInFrustum(center, size))
-	{
-		gGL.diffuseColor3f(1,0,0);
-		pushVerts(params, LLVertexBuffer::MAP_VERTEX);
-	}
-	if (gPipeline.mShadowCamera[5].AABBInFrustum(center, size))
-	{
-		gGL.diffuseColor3f(0,1,0);
-		pushVerts(params, LLVertexBuffer::MAP_VERTEX);
-	}
-	if (gPipeline.mShadowCamera[6].AABBInFrustum(center, size))
-	{
-		gGL.diffuseColor3f(0,0,1);
-		pushVerts(params, LLVertexBuffer::MAP_VERTEX);
-	}
-	if (gPipeline.mShadowCamera[7].AABBInFrustum(center, size))
-	{
-		gGL.diffuseColor3f(1,0,1);
-		pushVerts(params, LLVertexBuffer::MAP_VERTEX);
-	}
-
-	gGL.setSceneBlendType(LLRender::BT_ALPHA);
-}
-
 void renderTexelDensity(LLDrawable* drawable)
 {
 	if (LLViewerTexture::sDebugTexelsMode == LLViewerTexture::DEBUG_TEXELS_OFF
@@ -3320,9 +3268,6 @@ public:
 			//draw tight fit bounding boxes for spatial group
 			if (gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_OCTREE))
 			{	
-				group->rebuildGeom();
-				group->rebuildMesh();
-
 				renderOctree(group);
 				stop_glerror();
 			}
@@ -3330,9 +3275,6 @@ public:
 			//render visibility wireframe
 			if (gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_OCCLUSION))
 			{
-				group->rebuildGeom();
-				group->rebuildMesh();
-
 				gGL.flush();
 				gGL.pushMatrix();
 				gGLLastMatrix = NULL;
@@ -3354,9 +3296,6 @@ public:
 		{
 			return;
 		}
-
-		group->rebuildGeom();
-		group->rebuildMesh();
 
 		if (gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_BBOXES))
 		{
@@ -3492,10 +3431,6 @@ public:
 				{
 					renderBatchSize(draw_info);
 				}
-				if (gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_SHADOW_FRUSTA))
-				{
-					renderShadowFrusta(draw_info);
-				}
 			}
 		}
 	}
@@ -3526,9 +3461,6 @@ public:
 			//render visibility wireframe
 			if (gPipeline.hasRenderDebugMask(LLPipeline::RENDER_DEBUG_OCCLUSION))
 			{
-				group->rebuildGeom();
-				group->rebuildMesh();
-
 				gGL.flush();
 				gGL.pushMatrix();
 				gGLLastMatrix = NULL;
@@ -3569,9 +3501,6 @@ public:
 				stop_glerror();
 			}
 			
-			group->rebuildGeom();
-			group->rebuildMesh();
-
 			renderPhysicsShapes(group, mWireframe);
 		}
 	}
@@ -4035,8 +3964,6 @@ LLDrawInfo::LLDrawInfo(U16 start, U16 end, U32 count, U32 offset,
 	mAlphaMaskCutoff(0.5f),
 	mDiffuseAlphaMode(0)
 {
-	mVertexBuffer->validateRange(mStart, mEnd, mCount, mOffset);
-	
     mDebugColor = (rand() << 16) + rand();
     ((U8*)&mDebugColor)[3] = 200;
 }
@@ -4061,7 +3988,6 @@ LLDrawInfo::~LLDrawInfo()
 
 void LLDrawInfo::validate()
 {
-	mVertexBuffer->validateRange(mStart, mEnd, mCount, mOffset);
 }
 
 U64 LLDrawInfo::getSkinHash()

@@ -126,6 +126,9 @@ public:
 
     U32         getShaderMask(U32 alpha_mode = DIFFUSE_ALPHA_MODE_DEFAULT);
 
+    // get a UUID based on a hash of this Material
+    LLUUID getHash() const;
+
 protected:
     LLUUID      mNormalID;
     F32         mNormalOffsetX;

@@ -797,7 +797,7 @@ void LLImagePreviewSculpted::setPreviewTarget(LLImageRaw* imagep, F32 distance)
 	U32 num_indices = vf.mNumIndices;
 	U32 num_vertices = vf.mNumVertices;
 
-	mVertexBuffer = new LLVertexBuffer(LLVertexBuffer::MAP_VERTEX | LLVertexBuffer::MAP_NORMAL | LLVertexBuffer::MAP_TEXCOORD0, 0);
+	mVertexBuffer = new LLVertexBuffer(LLVertexBuffer::MAP_VERTEX | LLVertexBuffer::MAP_NORMAL | LLVertexBuffer::MAP_TEXCOORD0, GL_STREAM_DRAW);
 	if (!mVertexBuffer->allocateBuffer(num_vertices, num_indices, TRUE))
 	{
 		LL_WARNS() << "Failed to allocate Vertex Buffer for image preview to"
@@ -806,29 +806,24 @@ void LLImagePreviewSculpted::setPreviewTarget(LLImageRaw* imagep, F32 distance)
 		// We are likely to crash on getTexCoord0Strider()
 	}
 
-	LLStrider<LLVector3> vertex_strider;
-	LLStrider<LLVector3> normal_strider;
-	LLStrider<LLVector2> tc_strider;
-	LLStrider<U16> index_strider;
+    LLMappedVertexData md = mVertexBuffer->mapVertexBuffer();
+    U16* index_strider = mVertexBuffer->mapIndexBuffer();
 
-	mVertexBuffer->getVertexStrider(vertex_strider);
-	mVertexBuffer->getNormalStrider(normal_strider);
-	mVertexBuffer->getTexCoord0Strider(tc_strider);
-	mVertexBuffer->getIndexStrider(index_strider);
-
+	LLVector4a* vertex_strider = md.mPosition;
+    LLVector4a* normal_strider = md.mNormal;
+	LLVector2* tc_strider = md.mTexCoord0;
+	
 	// build vertices and normals
-	LLStrider<LLVector3> pos;
-	pos = (LLVector3*) vf.mPositions; pos.setStride(16);
-	LLStrider<LLVector3> norm;
-	norm = (LLVector3*) vf.mNormals; norm.setStride(16);
-	LLStrider<LLVector2> tc;
-	tc = (LLVector2*) vf.mTexCoords; tc.setStride(8);
+	
+	LLVector4a* pos = vf.mPositions; 
+	LLVector4a* norm = vf.mNormals; 
+	LLVector2* tc = vf.mTexCoords;
 
 	for (U32 i = 0; i < num_vertices; i++)
 	{
 		*(vertex_strider++) = *pos++;
-		LLVector3 normal = *norm++;
-		normal.normalize();
+		LLVector4a normal = *norm++;
+		normal.normalize3fast();
 		*(normal_strider++) = normal;
 		*(tc_strider++) = *tc++;
 	}
@@ -838,6 +833,9 @@ void LLImagePreviewSculpted::setPreviewTarget(LLImageRaw* imagep, F32 distance)
 	{
 		*(index_strider++) = vf.mIndices[i];
 	}
+
+    mVertexBuffer->unmapVertexBuffer();
+    mVertexBuffer->unmapIndexBuffer();
 }
 
 

@@ -994,11 +994,6 @@ BOOL LLVOSky::updateGeometry(LLDrawable *drawable)
 		v_agent[i] = HORIZON_DIST * SKY_BOX_MULT * LLVector3(x_sgn, y_sgn, z_sgn);
 	}
 
-	LLStrider<LLVector3> verticesp;
-	LLStrider<LLVector3> normalsp;
-	LLStrider<LLVector2> texCoordsp;
-	LLStrider<U16> indicesp;
-	U16 index_offset;
 	LLFace *face;
 
 	for (S32 side = 0; side < NUM_CUBEMAP_FACES; ++side)
@@ -1014,7 +1009,12 @@ BOOL LLVOSky::updateGeometry(LLDrawable *drawable)
 			buff->allocateBuffer(4, 6, TRUE);
 			face->setVertexBuffer(buff);
 
-			index_offset = face->getGeometry(verticesp,normalsp,texCoordsp, indicesp);
+            LLMappedVertexData md = buff->mapVertexBuffer();
+            U16* indicesp = buff->mapIndexBuffer();
+
+            LLVector4a* verticesp = md.mPosition;
+            LLVector2* texCoordsp = md.mTexCoord0;
+
 
 			S32 vtx = 0;
 			S32 curr_bit = side >> 1; // 0/1 = Z axis, 2/3 = Y, 4/5 = X
@@ -1027,10 +1027,10 @@ BOOL LLVOSky::updateGeometry(LLDrawable *drawable)
 			face->mCenterAgent = (F32)((side_dir << 1) - 1) * axis * HORIZON_DIST;
 
 			vtx = side_dir << curr_bit;
-			*(verticesp++)  = v_agent[vtx];
-			*(verticesp++)  = v_agent[vtx | 1 << j_bit];
-			*(verticesp++)  = v_agent[vtx | 1 << i_bit];
-			*(verticesp++)  = v_agent[vtx | 1 << i_bit | 1 << j_bit];
+			(*verticesp++).load3(v_agent[vtx].mV);
+			(*verticesp++).load3(v_agent[vtx | 1 << j_bit].mV);
+			(*verticesp++).load3(v_agent[vtx | 1 << i_bit].mV);
+			(*verticesp++).load3(v_agent[vtx | 1 << i_bit | 1 << j_bit].mV);
 
 			*(texCoordsp++) = TEX00;
 			*(texCoordsp++) = TEX01;
@@ -1038,15 +1038,16 @@ BOOL LLVOSky::updateGeometry(LLDrawable *drawable)
 			*(texCoordsp++) = TEX11;
 
 			// Triangles for each side
-			*indicesp++ = index_offset + 0;
-			*indicesp++ = index_offset + 1;
-			*indicesp++ = index_offset + 3;
+			*indicesp++ = 0;
+			*indicesp++ = 1;
+			*indicesp++ = 3;
 
-			*indicesp++ = index_offset + 0;
-			*indicesp++ = index_offset + 3;
-			*indicesp++ = index_offset + 2;
+			*indicesp++ = 0;
+			*indicesp++ = 3;
+			*indicesp++ = 2;
 
-			buff->flush();
+			buff->unmapVertexBuffer();
+            buff->unmapIndexBuffer();
 		}
 	}
 
@@ -1090,15 +1091,10 @@ BOOL LLVOSky::updateGeometry(LLDrawable *drawable)
 
 bool LLVOSky::updateHeavenlyBodyGeometry(LLDrawable *drawable, F32 scale, const S32 f, LLHeavenBody& hb, const LLVector3 &up, const LLVector3 &right)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWABLE;
 	mHeavenlyBodyUpdated = TRUE ;
 
-	LLStrider<LLVector3> verticesp;
-	LLStrider<LLVector3> normalsp;
-	LLStrider<LLVector2> texCoordsp;
-	LLStrider<U16> indicesp;
-	S32 index_offset;
 	LLFace *facep;
-
 
     LLQuaternion rot    = hb.getRotation();
 	LLVector3 to_dir    = LLVector3::x_axis * rot;
@@ -1136,34 +1132,24 @@ bool LLVOSky::updateHeavenlyBodyGeometry(LLDrawable *drawable, F32 scale, const 
 
 	facep = mFace[f];
 
-	if (!facep->getVertexBuffer())
-	{
-		facep->setSize(4, 6);
-		LLVertexBuffer* buff = new LLVertexBuffer(LLDrawPoolSky::VERTEX_DATA_MASK, GL_STREAM_DRAW);
-		if (!buff->allocateBuffer(facep->getGeomCount(), facep->getIndicesCount(), TRUE))
-		{
-			LL_WARNS() << "Failed to allocate Vertex Buffer for vosky to "
-				<< facep->getGeomCount() << " vertices and "
-				<< facep->getIndicesCount() << " indices" << LL_ENDL;
-		}
-		facep->setGeomIndex(0);
-		facep->setIndicesIndex(0);
-		facep->setVertexBuffer(buff);
-	}
+	facep->setSize(4, 6);
+	LLVertexBuffer* buff = new LLVertexBuffer(LLDrawPoolSky::VERTEX_DATA_MASK, GL_STATIC_DRAW);
+    buff->allocateBuffer(facep->getGeomCount(), facep->getIndicesCount(), TRUE);
+	
+    facep->setGeomIndex(0);
+	facep->setIndicesIndex(0);
+	facep->setVertexBuffer(buff);
 
-	llassert(facep->getVertexBuffer()->getNumIndices() == 6);
+    LLMappedVertexData md = buff->mapVertexBuffer();
+    U16* indicesp = buff->mapIndexBuffer();
 
-	index_offset = facep->getGeometry(verticesp,normalsp,texCoordsp, indicesp);
-
-	if (-1 == index_offset)
-	{
-		return TRUE;
-	}
+    LLVector4a* verticesp = md.mPosition;
+    LLVector2* texCoordsp = md.mTexCoord0;
 
 	for (S32 vtx = 0; vtx < 4; ++vtx)
 	{
 		hb.corner(vtx) = v_clipped[vtx];
-		*(verticesp++)  = hb.corner(vtx) + mCameraPosAgent;
+		(*verticesp++).load3((hb.corner(vtx) + mCameraPosAgent).mV);
 	}
 
 	*(texCoordsp++) = TEX01;
@@ -1171,15 +1157,16 @@ bool LLVOSky::updateHeavenlyBodyGeometry(LLDrawable *drawable, F32 scale, const 
 	*(texCoordsp++) = TEX11;
 	*(texCoordsp++) = TEX10;
 
-	*indicesp++ = index_offset + 0;
-	*indicesp++ = index_offset + 2;
-	*indicesp++ = index_offset + 1;
+	*indicesp++ = 0;
+	*indicesp++ = 2;
+	*indicesp++ = 1;
 
-	*indicesp++ = index_offset + 1;
-	*indicesp++ = index_offset + 2;
-	*indicesp++ = index_offset + 3;
+	*indicesp++ = 1;
+	*indicesp++ = 2;
+	*indicesp++ = 3;
 
-	facep->getVertexBuffer()->flush();
+    buff->unmapIndexBuffer();
+    buff->unmapVertexBuffer();
 
 	return TRUE;
 }
@@ -1226,6 +1213,7 @@ F32 dtClip(const LLVector3& v0, const LLVector3& v1, F32 far_clip2)
 void LLVOSky::updateReflectionGeometry(LLDrawable *drawable, F32 H,
 										 const LLHeavenBody& HB)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWABLE;
 	const LLVector3 &look_at = LLViewerCamera::getInstance()->getAtAxis();
 	// const F32 water_height = gAgent.getRegion()->getWaterHeight() + 0.001f;
 	// LLWorld::getInstance()->getWaterHeight() + 0.001f;
@@ -1376,155 +1364,144 @@ void LLVOSky::updateReflectionGeometry(LLDrawable *drawable, F32 H,
 
     if (face)
     {
-	if (!face->getVertexBuffer() || quads*4 != face->getGeomCount())
-	{
 		face->setSize(quads * 4, quads * 6);
 		LLVertexBuffer* buff = new LLVertexBuffer(LLDrawPoolWater::VERTEX_DATA_MASK, GL_STREAM_DRAW);
-		if (!buff->allocateBuffer(face->getGeomCount(), face->getIndicesCount(), TRUE))
-		{
-			LL_WARNS() << "Failed to allocate Vertex Buffer for vosky to "
-				<< face->getGeomCount() << " vertices and "
-				<< face->getIndicesCount() << " indices" << LL_ENDL;
-		}
+        buff->allocateBuffer(face->getGeomCount(), face->getIndicesCount(), TRUE);
+		
 		face->setIndicesIndex(0);
 		face->setGeomIndex(0);
 		face->setVertexBuffer(buff);
-	}
 
-	LLStrider<LLVector3> verticesp;
-	LLStrider<LLVector3> normalsp;
-	LLStrider<LLVector2> texCoordsp;
-	LLStrider<U16> indicesp;
-	S32 index_offset;
+        LLMappedVertexData md = buff->mapVertexBuffer();
+        U16* indicesp = buff->mapIndexBuffer();
+        U16 index_offset = 0;
+        LLVector4a* verticesp = md.mPosition;
+        LLVector2* texCoordsp = md.mTexCoord0;
 
-	index_offset = face->getGeometry(verticesp,normalsp,texCoordsp, indicesp);
-	if (-1 == index_offset)
-	{
-		return;
-	}
+	    
+	    LLColor3 hb_col3 = HB.getInterpColor();
+	    hb_col3.clamp();
+	    const LLColor4 hb_col = LLColor4(hb_col3);
 
-	LLColor3 hb_col3 = HB.getInterpColor();
-	hb_col3.clamp();
-	const LLColor4 hb_col = LLColor4(hb_col3);
+	    const F32 min_attenuation = 0.4f;
+	    const F32 max_attenuation = 0.7f;
+	    const F32 attenuation = min_attenuation
+		    + cos_angle_of_view * (max_attenuation - min_attenuation);
 
-	const F32 min_attenuation = 0.4f;
-	const F32 max_attenuation = 0.7f;
-	const F32 attenuation = min_attenuation
-		+ cos_angle_of_view * (max_attenuation - min_attenuation);
+            LLColor4 hb_refl_col = (1 - attenuation) * hb_col + attenuation * getSkyFogColor();
+	    face->setFaceColor(hb_refl_col);
 
-        LLColor4 hb_refl_col = (1 - attenuation) * hb_col + attenuation * getSkyFogColor();
-	face->setFaceColor(hb_refl_col);
+	    LLVector3 v_far[2];
+	    v_far[0] = v_refl_corner[1];
+	    v_far[1] = v_refl_corner[3];
 
-	LLVector3 v_far[2];
-	v_far[0] = v_refl_corner[1];
-	v_far[1] = v_refl_corner[3];
+	    if(dt_clip > 0)
+	    {
+		    if (dt_clip >= 1)
+		    {
+			    for (S32 vtx = 0; vtx < 4; ++vtx)
+			    {
+				    F32 ratio = far_clip / v_refl_corner[vtx].length();
+				    (*verticesp++).load3((v_refl_corner[vtx] = ratio * v_refl_corner[vtx] + mCameraPosAgent).mV);
+			    }
+			    const LLVector3 draw_pos = 0.25 *
+				    (v_refl_corner[0] + v_refl_corner[1] + v_refl_corner[2] + v_refl_corner[3]);
+			    face->mCenterAgent = draw_pos;
+		    }
+		    else
+		    {
+			    F32 ratio = far_clip / v_refl_corner[1].length();
+			    v_sprite_corner[1] = v_refl_corner[1] * ratio;
 
-	if(dt_clip > 0)
-	{
-		if (dt_clip >= 1)
-		{
-			for (S32 vtx = 0; vtx < 4; ++vtx)
-			{
-				F32 ratio = far_clip / v_refl_corner[vtx].length();
-				*(verticesp++) = v_refl_corner[vtx] = ratio * v_refl_corner[vtx] + mCameraPosAgent;
-			}
-			const LLVector3 draw_pos = 0.25 *
-				(v_refl_corner[0] + v_refl_corner[1] + v_refl_corner[2] + v_refl_corner[3]);
-			face->mCenterAgent = draw_pos;
-		}
-		else
-		{
-			F32 ratio = far_clip / v_refl_corner[1].length();
-			v_sprite_corner[1] = v_refl_corner[1] * ratio;
+			    ratio = far_clip / v_refl_corner[3].length();
+			    v_sprite_corner[3] = v_refl_corner[3] * ratio;
 
-			ratio = far_clip / v_refl_corner[3].length();
-			v_sprite_corner[3] = v_refl_corner[3] * ratio;
+			    v_refl_corner[1] = (1 - dt_clip) * v_refl_corner[1] + dt_clip * v_refl_corner[0];
+			    v_refl_corner[3] = (1 - dt_clip) * v_refl_corner[3] + dt_clip * v_refl_corner[2];
+			    v_sprite_corner[0] = v_refl_corner[1];
+			    v_sprite_corner[2] = v_refl_corner[3];
 
-			v_refl_corner[1] = (1 - dt_clip) * v_refl_corner[1] + dt_clip * v_refl_corner[0];
-			v_refl_corner[3] = (1 - dt_clip) * v_refl_corner[3] + dt_clip * v_refl_corner[2];
-			v_sprite_corner[0] = v_refl_corner[1];
-			v_sprite_corner[2] = v_refl_corner[3];
+			    for (S32 vtx = 0; vtx < 4; ++vtx)
+			    {
+				    (*verticesp++).load3((v_sprite_corner[vtx] + mCameraPosAgent).mV);
+			    }
 
-			for (S32 vtx = 0; vtx < 4; ++vtx)
-			{
-				*(verticesp++) = v_sprite_corner[vtx] + mCameraPosAgent;
-			}
+			    const LLVector3 draw_pos = 0.25 *
+				    (v_refl_corner[0] + v_sprite_corner[1] + v_refl_corner[2] + v_sprite_corner[3]);
+			    face->mCenterAgent = draw_pos;
+		    }
 
-			const LLVector3 draw_pos = 0.25 *
-				(v_refl_corner[0] + v_sprite_corner[1] + v_refl_corner[2] + v_sprite_corner[3]);
-			face->mCenterAgent = draw_pos;
-		}
+		    *(texCoordsp++) = TEX0tt;
+		    *(texCoordsp++) = TEX0t;
+		    *(texCoordsp++) = TEX1tt;
+		    *(texCoordsp++) = TEX1t;
 
-		*(texCoordsp++) = TEX0tt;
-		*(texCoordsp++) = TEX0t;
-		*(texCoordsp++) = TEX1tt;
-		*(texCoordsp++) = TEX1t;
+		    *indicesp++ = index_offset + 0;
+		    *indicesp++ = index_offset + 2;
+		    *indicesp++ = index_offset + 1;
 
-		*indicesp++ = index_offset + 0;
-		*indicesp++ = index_offset + 2;
-		*indicesp++ = index_offset + 1;
+		    *indicesp++ = index_offset + 1;
+		    *indicesp++ = index_offset + 2;
+		    *indicesp++ = index_offset + 3;
 
-		*indicesp++ = index_offset + 1;
-		*indicesp++ = index_offset + 2;
-		*indicesp++ = index_offset + 3;
+		    index_offset += 4;
+	    }
 
-		index_offset += 4;
-	}
+	    if (dt_clip < 1)
+	    {
+		    if (dt_clip <= 0)
+		    {
+			    const LLVector3 draw_pos = 0.25 *
+				    (v_refl_corner[0] + v_refl_corner[1] + v_refl_corner[2] + v_refl_corner[3]);
+			    face->mCenterAgent = draw_pos;
+		    }
 
-	if (dt_clip < 1)
-	{
-		if (dt_clip <= 0)
-		{
-			const LLVector3 draw_pos = 0.25 *
-				(v_refl_corner[0] + v_refl_corner[1] + v_refl_corner[2] + v_refl_corner[3]);
-			face->mCenterAgent = draw_pos;
-		}
+		    const F32 raws_inv = 1.f/raws;
+		    const F32 cols_inv = 1.f/cols;
+		    LLVector3 left	= v_refl_corner[0] - v_refl_corner[1];
+		    LLVector3 right = v_refl_corner[2] - v_refl_corner[3];
+		    left *= raws_inv;
+		    right *= raws_inv;
 
-		const F32 raws_inv = 1.f/raws;
-		const F32 cols_inv = 1.f/cols;
-		LLVector3 left	= v_refl_corner[0] - v_refl_corner[1];
-		LLVector3 right = v_refl_corner[2] - v_refl_corner[3];
-		left *= raws_inv;
-		right *= raws_inv;
+		    for (S32 raw = 0; raw < raws; ++raw)
+		    {
+			    F32 dt_v0 = raw * raws_inv;
+			    F32 dt_v1 = (raw + 1) * raws_inv;
+			    const LLVector3 BL = v_refl_corner[1] + (F32)raw * left;
+			    const LLVector3 BR = v_refl_corner[3] + (F32)raw * right;
+			    const LLVector3 EL = BL + left;
+			    const LLVector3 ER = BR + right;
+                    dt_v0 = dt_v1 = dtReflection(EL, cos_dir_from_top[0], sin_dir_from_top, diff_angl_dir);
+			    for (S32 col = 0; col < cols; ++col)
+			    {
+				    F32 dt_h0 = col * cols_inv;
+				    (*verticesp++).load3(((1 - dt_h0) * EL + dt_h0 * ER + mCameraPosAgent).mV);
+				    (*verticesp++).load3(((1 - dt_h0) * BL + dt_h0 * BR + mCameraPosAgent).mV);
+				    F32 dt_h1 = (col + 1) * cols_inv;
+				    (*verticesp++).load3(((1 - dt_h1) * EL + dt_h1 * ER + mCameraPosAgent).mV);
+				    (*verticesp++).load3(((1 - dt_h1) * BL + dt_h1 * BR + mCameraPosAgent).mV);
 
-		for (S32 raw = 0; raw < raws; ++raw)
-		{
-			F32 dt_v0 = raw * raws_inv;
-			F32 dt_v1 = (raw + 1) * raws_inv;
-			const LLVector3 BL = v_refl_corner[1] + (F32)raw * left;
-			const LLVector3 BR = v_refl_corner[3] + (F32)raw * right;
-			const LLVector3 EL = BL + left;
-			const LLVector3 ER = BR + right;
-                dt_v0 = dt_v1 = dtReflection(EL, cos_dir_from_top[0], sin_dir_from_top, diff_angl_dir);
-			for (S32 col = 0; col < cols; ++col)
-			{
-				F32 dt_h0 = col * cols_inv;
-				*(verticesp++) = (1 - dt_h0) * EL + dt_h0 * ER + mCameraPosAgent;
-				*(verticesp++) = (1 - dt_h0) * BL + dt_h0 * BR + mCameraPosAgent;
-				F32 dt_h1 = (col + 1) * cols_inv;
-				*(verticesp++) = (1 - dt_h1) * EL + dt_h1 * ER + mCameraPosAgent;
-				*(verticesp++) = (1 - dt_h1) * BL + dt_h1 * BR + mCameraPosAgent;
+				    *(texCoordsp++) = LLVector2(dt_h0, dt_v1);
+				    *(texCoordsp++) = LLVector2(dt_h0, dt_v0);
+				    *(texCoordsp++) = LLVector2(dt_h1, dt_v1);
+				    *(texCoordsp++) = LLVector2(dt_h1, dt_v0);
 
-				*(texCoordsp++) = LLVector2(dt_h0, dt_v1);
-				*(texCoordsp++) = LLVector2(dt_h0, dt_v0);
-				*(texCoordsp++) = LLVector2(dt_h1, dt_v1);
-				*(texCoordsp++) = LLVector2(dt_h1, dt_v0);
+				    *indicesp++ = index_offset + 0;
+				    *indicesp++ = index_offset + 2;
+				    *indicesp++ = index_offset + 1;
 
-				*indicesp++ = index_offset + 0;
-				*indicesp++ = index_offset + 2;
-				*indicesp++ = index_offset + 1;
+				    *indicesp++ = index_offset + 1;
+				    *indicesp++ = index_offset + 2;
+				    *indicesp++ = index_offset + 3;
 
-				*indicesp++ = index_offset + 1;
-				*indicesp++ = index_offset + 2;
-				*indicesp++ = index_offset + 3;
+				    index_offset += 4;
+			    }
+		    }
+	    }
 
-				index_offset += 4;
-			}
-		}
-	}
-
-	face->getVertexBuffer()->flush();
-}
+        buff->unmapIndexBuffer();
+        buff->unmapVertexBuffer();
+    }
 }
 
 void LLVOSky::updateFog(const F32 distance)

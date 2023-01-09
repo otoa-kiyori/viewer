@@ -35,10 +35,6 @@ uniform sampler2D diffuseMap;
 VARYING float pos_w;
 VARYING float target_pos_x;
 
-#if !defined(DEPTH_CLAMP)
-VARYING vec4 post_pos;
-#endif
-
 VARYING vec2 vary_texcoord0;
 VARYING vec4 vertex_color;
 
@@ -60,9 +56,4 @@ void main()
 	}
 
 	frag_color = vec4(1,1,1,1);
-
-#if !defined(DEPTH_CLAMP)
-	gl_FragDepth = max(post_pos.z/post_pos.w*0.5+0.5, 0.0);
-#endif
-
 }

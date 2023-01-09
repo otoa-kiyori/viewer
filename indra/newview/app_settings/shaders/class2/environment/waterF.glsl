@@ -161,10 +161,5 @@ void main()
 	color.a = spec * sunAngle2;
 	
 	frag_color = color;
-
-#if defined(WATER_EDGE)
-    gl_FragDepth = 0.9999847f;
-#endif
-	
 }
 

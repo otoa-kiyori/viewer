@@ -463,7 +463,7 @@ private:
 
 	LLPointer<LLRiggedVolume> mRiggedVolume;
 
-	// statics
+    // statics
 public:
 	static F32 sLODSlopDistanceFactor;// Changing this to zero, effectively disables the LOD transition slop
 	static F32 sLODFactor;				// LOD scale factor

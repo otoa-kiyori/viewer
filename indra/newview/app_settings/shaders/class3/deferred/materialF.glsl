@@ -78,7 +78,7 @@ uniform vec3 sun_dir;
 uniform vec3 moon_dir;
 VARYING vec2 vary_fragcoord;
 
-VARYING vec3 vary_position;
+in vec3 vary_position;
 
 uniform mat4 proj_mat;
 uniform mat4 inv_proj;
@@ -178,11 +178,7 @@ vec3 calcPointLightOrSpotLight(vec3 light_col, vec3 npos, vec3 diffuse, vec4 spe
 }
 
 #else
-#ifdef DEFINE_GL_FRAGCOLOR
-out vec4 frag_data[3];
-#else
-#define frag_data gl_FragData
-#endif
+out vec4 frag_data[4];
 #endif
 
 uniform sampler2D diffuseMap;  //always in sRGB space
@@ -194,7 +190,7 @@ uniform sampler2D bumpMap;
 #ifdef HAS_SPECULAR_MAP
 uniform sampler2D specularMap;
 
-VARYING vec2 vary_texcoord2;
+in vec2 vary_texcoord2;
 #endif
 
 uniform float env_intensity;
@@ -205,13 +201,13 @@ uniform float minimum_alpha;
 #endif
 
 #ifdef HAS_NORMAL_MAP
-VARYING vec3 vary_mat0;
-VARYING vec3 vary_mat1;
-VARYING vec3 vary_mat2;
-VARYING vec2 vary_texcoord1;
-#else
-VARYING vec3 vary_normal;
+in vec2 vary_texcoord1;
+in vec3 vary_tangent;
+flat in float vary_sign;
 #endif
+
+VARYING vec3 vary_normal;
+
 
 VARYING vec4 vertex_color;
 VARYING vec2 vary_texcoord0;
@@ -247,21 +243,21 @@ void main()
 #endif
 
 #ifdef HAS_NORMAL_MAP
-	vec4 norm = texture2D(bumpMap, vary_texcoord1.xy);
+    // from mikktspace.com
+    vec4 norm = texture2D(bumpMap, vary_texcoord1.xy);
+    float spec_scale = norm.a;
 
-	norm.xyz = norm.xyz * 2 - 1;
-
-	vec3 tnorm = vec3(dot(norm.xyz,vary_mat0),
-			  dot(norm.xyz,vary_mat1),
-			  dot(norm.xyz,vary_mat2));
+    vec3 vNt = norm.xyz*2.0-1.0;
+    float sign = vary_sign;
+    vec3 vN = vary_normal;
+    vec3 vT = vary_tangent.xyz;
+    
+    vec3 vB = sign * cross(vN, vT);
+    vec3 tnorm = normalize( vNt.x * vT + vNt.y * vB + vNt.z * vN );
 #else
-	vec4 norm = vec4(0,0,0,1.0);
-	vec3 tnorm = vary_normal;
+    float spec_scale = 1.0;
+	vec3 tnorm = normalize(vary_normal);
 #endif
-
-    norm.xyz = normalize(tnorm.xyz);
-
-    vec2 abnormal = encode_normal(norm.xyz);
 
     vec4 final_color = diffcol;
 
@@ -275,7 +271,7 @@ void main()
     
 #ifdef HAS_SPECULAR_MAP
     vec4 final_normal = vec4(encode_normal(normalize(tnorm)), env_intensity * spec.a, GBUFFER_FLAG_HAS_ATMOS);
-	final_specular.a = specular_color.a * norm.a;
+	final_specular.a = specular_color.a * spec_scale;
 #else
 	vec4 final_normal = vec4(encode_normal(normalize(tnorm)), env_intensity, GBUFFER_FLAG_HAS_ATMOS);
 	final_specular.a = specular_color.a;
@@ -291,7 +287,7 @@ void main()
     float shadow = 1.0f;
 
 #ifdef HAS_SUN_SHADOW
-    shadow = sampleDirectionalShadow(pos.xyz, norm.xyz, pos_screen);
+    shadow = sampleDirectionalShadow(pos.xyz, tnorm.xyz, pos_screen);
 #endif
 
     vec4 diffuse = final_color;
@@ -305,22 +301,22 @@ void main()
     vec3 amblit;
     vec3 additive;
     vec3 atten;
-    calcAtmosphericVarsLinear(pos.xyz, norm.xyz, light_dir, sunlit, amblit, additive, atten);
+    calcAtmosphericVarsLinear(pos.xyz, tnorm.xyz, light_dir, sunlit, amblit, additive, atten);
     
     vec3 ambenv;
     vec3 glossenv;
     vec3 legacyenv;
-    sampleReflectionProbesLegacy(ambenv, glossenv, legacyenv, pos.xyz, norm.xyz, final_specular.a, env_intensity);
+    sampleReflectionProbesLegacy(ambenv, glossenv, legacyenv, pos.xyz, tnorm.xyz, final_specular.a, env_intensity);
     
     // use sky settings ambient or irradiance map sample, whichever is brighter
     color = max(amblit, ambenv);
 
-    float da          = clamp(dot(norm.xyz, light_dir.xyz), 0.0, 1.0);
+    float da          = clamp(dot(tnorm.xyz, light_dir.xyz), 0.0, 1.0);
     vec3 sun_contrib = min(da, shadow) * sunlit;
     color.rgb += sun_contrib;
     color *= diffcol.rgb;
 
-    vec3 refnormpersp = reflect(pos.xyz, norm.xyz);
+    vec3 refnormpersp = reflect(pos.xyz, tnorm.xyz);
 
     if (final_specular.a > 0.0)  // specular reflection
     {
@@ -333,14 +329,14 @@ void main()
 
         color += spec_contrib;
 
-        applyGlossEnv(color, glossenv, final_specular, pos.xyz, norm.xyz);
+        applyGlossEnv(color, glossenv, final_specular, pos.xyz, tnorm.xyz);
     }
 
     color = mix(color.rgb, diffcol.rgb, diffuse.a);
 
     if (env_intensity > 0.0)
     {  // add environmentmap
-        applyLegacyEnv(color, legacyenv, final_specular, pos.xyz, norm.xyz, env_intensity);
+        applyLegacyEnv(color, legacyenv, final_specular, pos.xyz, tnorm.xyz, env_intensity);
     }
 
     color.rgb = mix(atmosFragLightingLinear(color.rgb, additive, atten), fullbrightAtmosTransportFragLinear(color, additive, atten), diffuse.a); 
@@ -354,7 +350,7 @@ void main()
     vec3 npos = normalize(-pos.xyz);
     vec3 light = vec3(0, 0, 0);
 
-#define LIGHT_LOOP(i) light.rgb += calcPointLightOrSpotLight(light_diffuse[i].rgb, npos, diffuse.rgb, final_specular, pos.xyz, norm.xyz, light_position[i], light_direction[i].xyz, light_attenuation[i].x, light_attenuation[i].y, light_attenuation[i].z, light_attenuation[i].w );
+#define LIGHT_LOOP(i) light.rgb += calcPointLightOrSpotLight(light_diffuse[i].rgb, npos, diffuse.rgb, final_specular, pos.xyz, tnorm.xyz, light_position[i], light_direction[i].xyz, light_attenuation[i].x, light_attenuation[i].y, light_attenuation[i].z, light_attenuation[i].w );
 
     LIGHT_LOOP(1)
         LIGHT_LOOP(2)
@@ -375,6 +371,7 @@ void main()
     frag_data[0] = final_color;    // gbuffer is sRGB for legacy materials
     frag_data[1] = final_specular; // XYZ = Specular color. W = Specular exponent.
     frag_data[2] = final_normal;   // XY = Normal.  Z = Env. intensity. W = 1 skip atmos (mask off fog)
+    frag_data[3] = vec4(0); // emissive
 #endif
 }
 

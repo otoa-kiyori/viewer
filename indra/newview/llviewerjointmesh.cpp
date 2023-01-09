@@ -305,10 +305,6 @@ U32 LLViewerJointMesh::drawShape( F32 pixelArea, BOOL first_pass, BOOL is_dummy)
 				uploadJointMatrices();
 			}
 			mask = mask | LLVertexBuffer::MAP_WEIGHT;
-			if (mFace->getPool()->getShaderLevel() > 1)
-			{
-				mask = mask | LLVertexBuffer::MAP_CLOTHWEIGHT;
-			}
 		}
 		
 		buff->setBuffer(mask);
@@ -368,6 +364,11 @@ void LLViewerJointMesh::updateFaceData(LLFace *face, F32 pixel_area, BOOL damp_w
 		return;
 	}
 
+    if (terse_update)
+    { // no longer allowed
+        return;
+    }
+
 	LLDrawPool *poolp = mFace->getPool();
 	BOOL hardware_skinning = (poolp && poolp->getShaderLevel() > 0) ? TRUE : FALSE;
 
@@ -379,13 +380,6 @@ void LLViewerJointMesh::updateFaceData(LLFace *face, F32 pixel_area, BOOL damp_w
     
     LL_PROFILE_ZONE_SCOPED;
 
-	LLStrider<LLVector3> verticesp;
-	LLStrider<LLVector3> normalsp;
-	LLStrider<LLVector2> tex_coordsp;
-	LLStrider<F32>		 vertex_weightsp;
-	LLStrider<LLVector4> clothing_weightsp;
-	LLStrider<U16> indicesp;
-
 	// Copy data into the faces from the polymesh data.
 	if (mMesh && mValid)
 	{
@@ -393,14 +387,30 @@ void LLViewerJointMesh::updateFaceData(LLFace *face, F32 pixel_area, BOOL damp_w
 
 		if (num_verts)
 		{
-			face->getVertexBuffer()->getIndexStrider(indicesp);
-			face->getGeometryAvatar(verticesp, normalsp, tex_coordsp, vertex_weightsp, clothing_weightsp);
+            LLVertexBuffer* buff = face->getVertexBuffer();
+            //if (!buff->isMappable())
+            {
+                // make a new vertex buffer, DO NOT update an old one
+                buff = new LLVertexBuffer(LLDrawPoolAvatar::VERTEX_DATA_MASK, GL_STATIC_DRAW);
+                buff->allocateBuffer(face->getGeomCount(), face->getIndicesCount(), true);
+                face->setGeomIndex(0);
+                face->setIndicesIndex(0);
+                face->setVertexBuffer(buff);
+            }
+
+            LLMappedVertexData md = buff->mapVertexBuffer();
+            U16* indicesp = buff->mapIndexBuffer();
+
+            LLVector4a* verticesp = md.mPosition;
+            LLVector4a* normalsp = md.mNormal;
+            LLVector2* tex_coordsp = md.mTexCoord0;
+            F32* vertex_weightsp = md.mWeight;
+
+			//verticesp += mMesh->mFaceVertexOffset;
+			//normalsp += mMesh->mFaceVertexOffset;
 			
-			verticesp += mMesh->mFaceVertexOffset;
-			normalsp += mMesh->mFaceVertexOffset;
-			
-			F32* v = (F32*) verticesp.get();
-			F32* n = (F32*) normalsp.get();
+			F32* v = (F32*) verticesp->getF32ptr();
+			F32* n = (F32*) normalsp->getF32ptr();
 			
 			U32 words = num_verts*4;
 
@@ -410,34 +420,34 @@ void LLViewerJointMesh::updateFaceData(LLFace *face, F32 pixel_area, BOOL damp_w
 			
 			if (!terse_update)
 			{
-				vertex_weightsp += mMesh->mFaceVertexOffset;
-				clothing_weightsp += mMesh->mFaceVertexOffset;
-				tex_coordsp += mMesh->mFaceVertexOffset;
+				//vertex_weightsp += mMesh->mFaceVertexOffset;
+				//tex_coordsp += mMesh->mFaceVertexOffset;
 		
-				F32* tc = (F32*) tex_coordsp.get();
-				F32* vw = (F32*) vertex_weightsp.get();
-				F32* cw = (F32*) clothing_weightsp.get();	
+				F32* tc = (F32*) tex_coordsp->mV;
+				F32* vw = (F32*) vertex_weightsp;
 
 				S32 tc_size = (num_verts*2*sizeof(F32)+0xF) & ~0xF;
 				LLVector4a::memcpyNonAliased16(tc, (F32*) mMesh->getTexCoords(), tc_size);
 				S32 vw_size = (num_verts*sizeof(F32)+0xF) & ~0xF;	
 				LLVector4a::memcpyNonAliased16(vw, (F32*) mMesh->getWeights(), vw_size);	
-				LLVector4a::memcpyNonAliased16(cw, (F32*) mMesh->getClothingWeights(), num_verts*4*sizeof(F32));	
 			}
 
 			const U32 idx_count = mMesh->getNumFaces()*3;
 
-			indicesp += mMesh->mFaceIndexOffset;
+			//indicesp += mMesh->mFaceIndexOffset;
 
-			U16* __restrict idx = indicesp.get();
+			U16* __restrict idx = indicesp;
 			S32* __restrict src_idx = (S32*) mMesh->getFaces();	
 
-			const S32 offset = (S32) mMesh->mFaceVertexOffset;
+			//const S32 offset = (S32) mMesh->mFaceVertexOffset;
 
 			for (S32 i = 0; i < idx_count; ++i)
 			{
-				*(idx++) = *(src_idx++)+offset;
+                *(idx++) = *(src_idx++); // +offset;
 			}
+
+            buff->unmapIndexBuffer();
+            buff->unmapVertexBuffer();
 		}
 	}
 }
@@ -457,16 +467,16 @@ BOOL LLViewerJointMesh::updateLOD(F32 pixel_area, BOOL activate)
 // static
 void LLViewerJointMesh::updateGeometry(LLFace *mFace, LLPolyMesh *mMesh)
 {
-	LLStrider<LLVector3> o_vertices;
-	LLStrider<LLVector3> o_normals;
-
 	//get vertex and normal striders
 	LLVertexBuffer* buffer = mFace->getVertexBuffer();
-	buffer->getVertexStrider(o_vertices,  0);
-	buffer->getNormalStrider(o_normals,   0);
 
-	F32* __restrict vert = o_vertices[0].mV;
-	F32* __restrict norm = o_normals[0].mV;
+    LLMappedVertexData md = buffer->mapVertexBuffer();
+
+    LLVector4a* o_vertices = md.mPosition;
+    LLVector4a* o_normals = md.mNormal;
+
+	F32* __restrict vert = o_vertices[0].getF32ptr();
+	F32* __restrict norm = o_normals[0].getF32ptr();
 
 	const F32* __restrict weights = mMesh->getWeights();
 	const LLVector4a* __restrict coords = (LLVector4a*) mMesh->getCoords();
@@ -506,7 +516,7 @@ void LLViewerJointMesh::updateGeometry(LLFace *mFace, LLPolyMesh *mMesh)
 		}
 	}
 
-	buffer->flush();
+    buffer->unmapVertexBuffer();
 }
 
 void LLViewerJointMesh::updateJointGeometry()

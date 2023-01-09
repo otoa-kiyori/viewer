@@ -117,8 +117,8 @@ void LLDrawPoolTree::render(S32 pass)
 				gPipeline.mMatrixOpCount++;
 			}
 
-			buff->setBufferFast(LLDrawPoolTree::VERTEX_DATA_MASK);
-			buff->drawRangeFast(LLRender::TRIANGLES, 0, buff->getNumVerts()-1, buff->getNumIndices(), 0); 
+			buff->setBuffer(LLDrawPoolTree::VERTEX_DATA_MASK);
+			buff->drawRange(LLRender::TRIANGLES, 0, buff->getNumVerts()-1, buff->getNumIndices(), 0); 
 		}
 	}
 }
@@ -153,6 +153,7 @@ void LLDrawPoolTree::beginDeferredPass(S32 pass)
 void LLDrawPoolTree::renderDeferred(S32 pass)
 {
     LL_PROFILE_ZONE_SCOPED;
+    LL_PROFILE_GPU_ZONE("deferred tree");
 	render(pass);
 }
 

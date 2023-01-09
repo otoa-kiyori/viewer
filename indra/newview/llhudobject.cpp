@@ -267,6 +267,7 @@ void LLHUDObject::updateAll()
 // static
 void LLHUDObject::renderAll()
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_DISPLAY;
     LLGLSUIDefault gls_ui;
 
     gGL.color4f(1, 1, 1, 1);

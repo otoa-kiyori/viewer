@@ -25,7 +25,7 @@
 /*[EXTRA_CODE_HERE]*/ 
 
 #ifdef DEFINE_GL_FRAGCOLOR
-out vec4 frag_data[3];
+out vec4 frag_data[4];
 #else
 #define frag_data gl_FragData
 #endif
@@ -125,7 +125,6 @@ void main()
     frag_data[0] = vec4(color.rgb, alpha1);
     frag_data[1] = vec4(0.0,0.0,0.0,0.0);
     frag_data[2] = vec4(0,0,0,GBUFFER_FLAG_SKIP_ATMOS);
-
-    gl_FragDepth = LL_SHADER_CONST_CLOUD_MOON_DEPTH; // SL-14113 Stars and Clouds need same depth
+    frag_data[3] = vec4(0);
 }
 

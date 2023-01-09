@@ -87,8 +87,6 @@ public:
     // return mSkinHash->mHash, or 0 if mSkinHash is null
     U64 getSkinHash();
 
-	LLVector4a mExtents[2];
-	
 	LLPointer<LLVertexBuffer> mVertexBuffer;
 	LLPointer<LLViewerTexture>     mTexture;
 	std::vector<LLPointer<LLViewerTexture> > mTextureList;
@@ -313,8 +311,7 @@ public:
 	F32 getUpdateUrgency() const;
 	BOOL changeLOD();
 	void rebuildGeom();
-	void rebuildMesh();
-
+	
 	void setState(U32 state)       {mState |= state;}
 	void dirtyGeom() { setState(GEOM_DIRTY); }
 	void dirtyMesh() { setState(MESH_DIRTY); }
@@ -386,7 +383,6 @@ public:
 	std::vector<LLFace*> mFaceList;
 	virtual ~LLGeometryManager() { }
 	virtual void rebuildGeom(LLSpatialGroup* group) = 0;
-	virtual void rebuildMesh(LLSpatialGroup* group) = 0;
 	virtual void getGeometry(LLSpatialGroup* group) = 0;
 	virtual void addGeometryCount(LLSpatialGroup* group, U32 &vertex_count, U32 &index_count);
 	
@@ -422,8 +418,7 @@ public:
 	virtual F32 calcPixelArea(LLSpatialGroup* group, LLCamera& camera);
 
 	virtual void rebuildGeom(LLSpatialGroup* group);
-	virtual void rebuildMesh(LLSpatialGroup* group);
-
+	
 	BOOL visibleObjectsInFrustum(LLCamera& camera);
 	/*virtual*/ S32 cull(LLCamera &camera, bool do_occlusion=false); // Cull on arbitrary frustum
 	S32 cull(LLCamera &camera, std::vector<LLDrawable *>* results, BOOL for_select); // Cull on arbitrary frustum
@@ -616,7 +611,6 @@ class LLTerrainPartition : public LLSpatialPartition
 public:
 	LLTerrainPartition(LLViewerRegion* regionp);
 	virtual void getGeometry(LLSpatialGroup* group);
-	virtual LLVertexBuffer* createVertexBuffer(U32 type_mask, U32 usage);
 };
 
 //spatial partition for trees
@@ -673,7 +667,6 @@ class LLVolumeGeometryManager: public LLGeometryManager
 	LLVolumeGeometryManager();
 	virtual ~LLVolumeGeometryManager();
 	virtual void rebuildGeom(LLSpatialGroup* group);
-	virtual void rebuildMesh(LLSpatialGroup* group);
 	virtual void getGeometry(LLSpatialGroup* group);
     virtual void addGeometryCount(LLSpatialGroup* group, U32& vertex_count, U32& index_count);
 	U32 genDrawInfo(LLSpatialGroup* group, U32 mask, LLFace** faces, U32 face_count, BOOL distance_sort = FALSE, BOOL batch_textures = FALSE, BOOL rigged = FALSE);
@@ -700,7 +693,6 @@ public:
 	LLVolumePartition(LLViewerRegion* regionp);
 	virtual void rebuildGeom(LLSpatialGroup* group) { LLVolumeGeometryManager::rebuildGeom(group); }
 	virtual void getGeometry(LLSpatialGroup* group) { LLVolumeGeometryManager::getGeometry(group); }
-	virtual void rebuildMesh(LLSpatialGroup* group) { LLVolumeGeometryManager::rebuildMesh(group); }
 	virtual void addGeometryCount(LLSpatialGroup* group, U32 &vertex_count, U32& index_count) { LLVolumeGeometryManager::addGeometryCount(group, vertex_count, index_count); }
 };
 
@@ -711,7 +703,6 @@ public:
 	LLVolumeBridge(LLDrawable* drawable, LLViewerRegion* regionp);
 	virtual void rebuildGeom(LLSpatialGroup* group) { LLVolumeGeometryManager::rebuildGeom(group); }
 	virtual void getGeometry(LLSpatialGroup* group) { LLVolumeGeometryManager::getGeometry(group); }
-	virtual void rebuildMesh(LLSpatialGroup* group) { LLVolumeGeometryManager::rebuildMesh(group); }
 	virtual void addGeometryCount(LLSpatialGroup* group, U32 &vertex_count, U32& index_count) { LLVolumeGeometryManager::addGeometryCount(group, vertex_count, index_count); }
 };
 

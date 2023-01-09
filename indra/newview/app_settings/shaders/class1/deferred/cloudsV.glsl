@@ -77,7 +77,6 @@ void main()
 {
 	// World / view / projection
 	gl_Position = modelview_projection_matrix * vec4(position.xyz, 1.0);
-
 	// Texture coords
     // SL-13084 EEP added support for custom cloud textures -- flip them horizontally to match the preview of Clouds > Cloud Scroll
     vary_texcoord0 = vec2(-texcoord0.x, texcoord0.y);  // See: LLSettingsVOSky::applySpecial

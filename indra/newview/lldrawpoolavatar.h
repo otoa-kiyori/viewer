@@ -55,8 +55,7 @@ public:
 		VERTEX_DATA_MASK =	LLVertexBuffer::MAP_VERTEX |
 							LLVertexBuffer::MAP_NORMAL |
 							LLVertexBuffer::MAP_TEXCOORD0 |
-							LLVertexBuffer::MAP_WEIGHT |
-							LLVertexBuffer::MAP_CLOTHWEIGHT
+							LLVertexBuffer::MAP_WEIGHT
 	};
 
     ~LLDrawPoolAvatar();
@@ -127,12 +126,6 @@ typedef enum
 	static F32 sMinimumAlpha;
 
 	static LLGLSLShader* sVertexProgram;
-};
-
-class LLVertexBufferAvatar : public LLVertexBuffer
-{
-public:
-	LLVertexBufferAvatar();
 };
 
 extern S32 AVATAR_OFFSET_POS;

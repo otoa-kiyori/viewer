@@ -77,7 +77,6 @@
 #include "llregionhandle.h"
 #include "llresmgr.h"
 #include "llselectmgr.h"
-#include "llsprite.h"
 #include "lltargetingmotion.h"
 #include "lltoolmgr.h"
 #include "lltoolmorph.h"
@@ -2345,75 +2344,23 @@ void LLVOAvatar::updateMeshData()
 			facep->setGeomIndex(0);
 			facep->setIndicesIndex(0);
 		
-			LLVertexBuffer* buff = facep->getVertexBuffer();
-			if(!facep->getVertexBuffer())
+			for(S32 k = j ; k < part_index ; k++)
 			{
-				buff = new LLVertexBufferAvatar();
-				if (!buff->allocateBuffer(num_vertices, num_indices, TRUE))
+				bool rigid = false;
+				if (k == MESH_ID_EYEBALL_LEFT ||
+					k == MESH_ID_EYEBALL_RIGHT)
 				{
-					LL_WARNS() << "Failed to allocate Vertex Buffer for Mesh to "
-						<< num_vertices << " vertices and "
-						<< num_indices << " indices" << LL_ENDL;
-					// Attempt to create a dummy triangle (one vertex, 3 indices, all 0)
-					facep->setSize(1, 3);
-					buff->allocateBuffer(1, 3, true);
-					memset((U8*) buff->getMappedData(), 0, buff->getSize());
-					memset((U8*) buff->getMappedIndices(), 0, buff->getIndicesSize());
+					//eyeballs can't have terse updates since they're never rendered with
+					//the hardware skinning shader
+					rigid = true;
 				}
-				facep->setVertexBuffer(buff);
-			}
-			else
-			{
-				if (buff->getNumIndices() == num_indices &&
-					buff->getNumVerts() == num_vertices)
-				{
-					terse_update = true;
-				}
-				else
-				{
-					if (!buff->resizeBuffer(num_vertices, num_indices))
-					{
-						LL_WARNS() << "Failed to allocate vertex buffer for Mesh, Substituting" << LL_ENDL;
-						// Attempt to create a dummy triangle (one vertex, 3 indices, all 0)
-						facep->setSize(1, 3);
-						buff->resizeBuffer(1, 3);
-						memset((U8*) buff->getMappedData(), 0, buff->getSize());
-						memset((U8*) buff->getMappedIndices(), 0, buff->getIndicesSize());
-					}
-				}
-			}
-			
-		
-			// This is a hack! Avatars have their own pool, so we are detecting
-			//   the case of more than one avatar in the pool (thus > 0 instead of >= 0)
-			if (facep->getGeomIndex() > 0)
-			{
-				LL_ERRS() << "non-zero geom index: " << facep->getGeomIndex() << " in LLVOAvatar::restoreMeshData" << LL_ENDL;
-			}
-
-			if (num_vertices == buff->getNumVerts() && num_indices == buff->getNumIndices())
-			{
-				for(S32 k = j ; k < part_index ; k++)
-				{
-					bool rigid = false;
-					if (k == MESH_ID_EYEBALL_LEFT ||
-						k == MESH_ID_EYEBALL_RIGHT)
-					{
-						//eyeballs can't have terse updates since they're never rendered with
-						//the hardware skinning shader
-						rigid = true;
-					}
 				
-					LLViewerJoint* mesh = getViewerJoint(k);
-					if (mesh)
-					{
-						mesh->updateFaceData(facep, mAdjustedPixelArea, k == MESH_ID_HAIR, terse_update && !rigid);
-					}
+				LLViewerJoint* mesh = getViewerJoint(k);
+				if (mesh)
+				{
+					mesh->updateFaceData(facep, mAdjustedPixelArea, k == MESH_ID_HAIR, terse_update && !rigid);
 				}
 			}
-
-			stop_glerror();
-			buff->flush();
 
 			if(!f_num)
 			{
@@ -5032,16 +4979,6 @@ U32 LLVOAvatar::renderSkinned()
 			}
 			mNeedsSkin = FALSE;
 			mLastSkinTime = gFrameTimeSeconds;
-
-			LLFace * face = mDrawable->getFace(0);
-			if (face)
-			{
-				LLVertexBuffer* vb = face->getVertexBuffer();
-				if (vb)
-				{
-					vb->flush();
-				}
-			}
 		}
 	}
 	else
@@ -5291,13 +5228,13 @@ U32 LLVOAvatar::renderImpostor(LLColor4U color, S32 diffuse_channel)
 	gGL.getTexUnit(diffuse_channel)->bind(&mImpostor);
 	gGL.begin(LLRender::QUADS);
 	gGL.texCoord2f(0,0);
-	gGL.vertex3fv((pos+left-up).mV);
+	gGL.vertex3fvui((pos+left-up).mV);
 	gGL.texCoord2f(1,0);
-	gGL.vertex3fv((pos-left-up).mV);
+	gGL.vertex3fvui((pos-left-up).mV);
 	gGL.texCoord2f(1,1);
-	gGL.vertex3fv((pos-left+up).mV);
+	gGL.vertex3fvui((pos-left+up).mV);
 	gGL.texCoord2f(0,1);
-	gGL.vertex3fv((pos+left+up).mV);
+	gGL.vertex3fvui((pos+left+up).mV);
 	gGL.end();
 	gGL.flush();
 	}

@@ -55,7 +55,7 @@ std::set<LLGLSLShader*> LLGLSLShader::sInstances;
 U64 LLGLSLShader::sTotalTimeElapsed = 0;
 U32 LLGLSLShader::sTotalTrianglesDrawn = 0;
 U64 LLGLSLShader::sTotalSamplesDrawn = 0;
-U32 LLGLSLShader::sTotalDrawCalls = 0;
+U32 LLGLSLShader::sTotalBinds = 0;
 
 //UI shader -- declared here so llui_libtest will link properly
 LLGLSLShader    gUIProgram;
@@ -121,7 +121,7 @@ void LLGLSLShader::initProfile()
     sTotalTimeElapsed = 0;
     sTotalTrianglesDrawn = 0;
     sTotalSamplesDrawn = 0;
-    sTotalDrawCalls = 0;
+    sTotalBinds = 0;
 
     for (std::set<LLGLSLShader*>::iterator iter = sInstances.begin(); iter != sInstances.end(); ++iter)
     {
@@ -171,31 +171,18 @@ void LLGLSLShader::clearStats()
     mTrianglesDrawn = 0;
     mTimeElapsed = 0;
     mSamplesDrawn = 0;
-    mDrawCalls = 0;
-    mTextureStateFetched = false;
-    mTextureMagFilter.clear();
-    mTextureMinFilter.clear();
+    mBinds = 0;
 }
 
 void LLGLSLShader::dumpStats()
 {
-    if (mDrawCalls > 0)
+    if (mBinds> 0)
     {
         LL_INFOS() << "=============================================" << LL_ENDL;
         LL_INFOS() << mName << LL_ENDL;
         for (U32 i = 0; i < mShaderFiles.size(); ++i)
         {
             LL_INFOS() << mShaderFiles[i].first << LL_ENDL;
-        }
-        for (U32 i = 0; i < mTexture.size(); ++i)
-        {
-            GLint idx = mTexture[i];
-            
-            if (idx >= 0)
-            {
-                GLint uniform_idx = getUniformLocation(i);
-                LL_INFOS() << mUniformNameMap[uniform_idx] << " - " << std::hex << mTextureMagFilter[i] << "/" << mTextureMinFilter[i] << std::dec << LL_ENDL;
-            }
         }
         LL_INFOS() << "=============================================" << LL_ENDL;
     
@@ -210,11 +197,10 @@ void LLGLSLShader::dumpStats()
         F32 samples_sec = (F32) mSamplesDrawn/1000000000.0;
         samples_sec /= seconds;
 
-        F32 pct_calls = (F32) mDrawCalls/(F32)sTotalDrawCalls*100.f;
-        U32 avg_batch = mTrianglesDrawn/mDrawCalls;
+        F32 pct_binds = (F32) mBinds/(F32)sTotalBinds*100.f;
 
         LL_INFOS() << "Triangles Drawn: " << mTrianglesDrawn <<  " " << llformat("(%.2f pct of total, %.3f million/sec)", pct_tris, tris_sec ) << LL_ENDL;
-        LL_INFOS() << "Draw Calls: " << mDrawCalls << " " << llformat("(%.2f pct of total, avg %d tris/call)", pct_calls, avg_batch) << LL_ENDL;
+        LL_INFOS() << "Binds: " << mBinds << " " << llformat("(%.2f pct of total)", pct_binds) << LL_ENDL;
         LL_INFOS() << "SamplesDrawn: " << mSamplesDrawn << " " << llformat("(%.2f pct of total, %.3f billion/sec)", pct_samples, samples_sec) << LL_ENDL;
         LL_INFOS() << "Time Elapsed: " << mTimeElapsed << " " << llformat("(%.2f pct of total, %.5f ms)\n", (F32) ((F64)mTimeElapsed/(F64)sTotalTimeElapsed)*100.f, ms) << LL_ENDL;
     }
@@ -232,91 +218,63 @@ void LLGLSLShader::startProfile()
 }
 
 //static
-void LLGLSLShader::stopProfile(U32 count, U32 mode)
+void LLGLSLShader::stopProfile()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_SHADER;
+    
     if (sProfileEnabled && sCurBoundShaderPtr)
     {
-        sCurBoundShaderPtr->readProfileQuery(count, mode);
+        sCurBoundShaderPtr->unbind();
     }
 }
 
 void LLGLSLShader::placeProfileQuery()
 {
-    if (mTimerQuery == 0)
+    if (sProfileEnabled)
     {
-        glGenQueries(1, &mSamplesQuery);
-        glGenQueries(1, &mTimerQuery);
-    }
-
-    if (!mTextureStateFetched)
-    {
-        mTextureStateFetched = true;
-        mTextureMagFilter.resize(mTexture.size());
-        mTextureMinFilter.resize(mTexture.size());
-
-        U32 cur_active = gGL.getCurrentTexUnitIndex();
-
-        for (U32 i = 0; i < mTexture.size(); ++i)
+        if (mTimerQuery == 0)
         {
-            GLint idx = mTexture[i];
-
-            if (idx >= 0)
-            {
-                gGL.getTexUnit(idx)->activate();
-
-                U32 mag = 0xFFFFFFFF;
-                U32 min = 0xFFFFFFFF;
-
-                U32 type = LLTexUnit::getInternalType(gGL.getTexUnit(idx)->getCurrType());
-
-                glGetTexParameteriv(type, GL_TEXTURE_MAG_FILTER, (GLint*) &mag);
-                glGetTexParameteriv(type, GL_TEXTURE_MIN_FILTER, (GLint*) &min);
-
-                mTextureMagFilter[i] = mag;
-                mTextureMinFilter[i] = min;
-            }
+            glGenQueries(1, &mSamplesQuery);
+            glGenQueries(1, &mTimerQuery);
+            glGenQueries(1, &mPrimitivesQuery);
         }
 
-        gGL.getTexUnit(cur_active)->activate();
+        glBeginQuery(GL_SAMPLES_PASSED, mSamplesQuery);
+        glBeginQuery(GL_TIME_ELAPSED, mTimerQuery);
+        glBeginQuery(GL_PRIMITIVES_GENERATED, mPrimitivesQuery);
     }
-
-
-    glBeginQuery(GL_SAMPLES_PASSED, mSamplesQuery);
-    glBeginQuery(GL_TIME_ELAPSED, mTimerQuery);
 }
 
-void LLGLSLShader::readProfileQuery(U32 count, U32 mode)
+void LLGLSLShader::readProfileQuery()
 {
-    glEndQuery(GL_TIME_ELAPSED);
-    glEndQuery(GL_SAMPLES_PASSED);
-    
-    U64 time_elapsed = 0;
-    glGetQueryObjectui64v(mTimerQuery, GL_QUERY_RESULT, &time_elapsed);
-
-    U64 samples_passed = 0;
-    glGetQueryObjectui64v(mSamplesQuery, GL_QUERY_RESULT, &samples_passed);
-
-    sTotalTimeElapsed += time_elapsed;
-    mTimeElapsed += time_elapsed;
-
-    sTotalSamplesDrawn += samples_passed;
-    mSamplesDrawn += samples_passed;
-
-    U32 tri_count = 0;
-    switch (mode)
+    if (sProfileEnabled)
     {
-        case LLRender::TRIANGLES: tri_count = count/3; break;
-        case LLRender::TRIANGLE_FAN: tri_count = count-2; break;
-        case LLRender::TRIANGLE_STRIP: tri_count = count-2; break;
-        default: tri_count = count; break; //points lines etc just use primitive count
+        glEndQuery(GL_TIME_ELAPSED);
+        glEndQuery(GL_SAMPLES_PASSED);
+        glEndQuery(GL_PRIMITIVES_GENERATED);
+
+        U64 time_elapsed = 0;
+        glGetQueryObjectui64v(mTimerQuery, GL_QUERY_RESULT, &time_elapsed);
+
+        U64 samples_passed = 0;
+        glGetQueryObjectui64v(mSamplesQuery, GL_QUERY_RESULT, &samples_passed);
+
+        U64 primitives_generated = 0;
+        glGetQueryObjectui64v(mPrimitivesQuery, GL_QUERY_RESULT, &primitives_generated);
+        sTotalTimeElapsed += time_elapsed;
+        mTimeElapsed += time_elapsed;
+
+        sTotalSamplesDrawn += samples_passed;
+        mSamplesDrawn += samples_passed;
+
+        U32 tri_count = (U32)primitives_generated / 3;
+
+        mTrianglesDrawn += tri_count;
+        sTotalTrianglesDrawn += tri_count;
+
+        sTotalBinds++;
+        mBinds++;
     }
-
-    mTrianglesDrawn += tri_count;
-    sTotalTrianglesDrawn += tri_count;
-
-    sTotalDrawCalls++;
-    mDrawCalls++;
 }
 
 
@@ -330,8 +288,8 @@ LLGLSLShader::LLGLSLShader()
       mShaderGroup(SG_DEFAULT), 
       mUniformsDirty(FALSE),
       mTimerQuery(0),
-      mSamplesQuery(0)
-
+      mSamplesQuery(0),
+      mPrimitivesQuery(0)
 {
     
 }
@@ -1031,10 +989,16 @@ void LLGLSLShader::bind()
 
     if (sCurBoundShader != mProgramObject)  // Don't re-bind current shader
     {
+        if (sCurBoundShaderPtr)
+        {
+            sCurBoundShaderPtr->readProfileQuery();
+        }
         LLVertexBuffer::unbind();
         glUseProgram(mProgramObject);
         sCurBoundShader = mProgramObject;
         sCurBoundShaderPtr = this;
+        placeProfileQuery();
+        LLVertexBuffer::setupClientArrays(mAttributeMask);
     }
 
     if (mUniformsDirty)
@@ -1060,8 +1024,11 @@ void LLGLSLShader::bind(bool rigged)
 void LLGLSLShader::unbind()
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_SHADER;
-
     gGL.flush();
+    if (sCurBoundShaderPtr)
+    {
+        sCurBoundShaderPtr->readProfileQuery();
+    }
     stop_glerror();
     LLVertexBuffer::unbind();
     glUseProgram(0);
@@ -1075,6 +1042,12 @@ void LLGLSLShader::bindNoShader(void)
     LL_PROFILE_ZONE_SCOPED_CATEGORY_SHADER;
 
     LLVertexBuffer::unbind();
+
+    if (sCurBoundShaderPtr)
+    {
+        sCurBoundShaderPtr->readProfileQuery();
+    }
+
     glUseProgram(0);
     sCurBoundShader = 0;
     sCurBoundShaderPtr = NULL;

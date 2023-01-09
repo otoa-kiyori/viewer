@@ -163,25 +163,10 @@ public:
 	BOOL getGeometryVolume(const LLVolume& volume,
 						const S32 &f,
 						const LLMatrix4& mat_vert, const LLMatrix3& mat_normal,
+                        LLMappedVertexData& md,
+                        U16* indicesp,
 						const U16 &index_offset,
 						bool force_rebuild = false);
-
-	// For avatar
-	U16			 getGeometryAvatar(
-									LLStrider<LLVector3> &vertices,
-									LLStrider<LLVector3> &normals,
-								    LLStrider<LLVector2> &texCoords,
-									LLStrider<F32>		 &vertex_weights,
-									LLStrider<LLVector4> &clothing_weights);
-
-	// For volumes, etc.
-	U16				getGeometry(LLStrider<LLVector3> &vertices,  
-								LLStrider<LLVector3> &normals,
-								LLStrider<LLVector2> &texCoords, 
-								LLStrider<U16>  &indices);
-
-	S32 getColors(LLStrider<LLColor4U> &colors);
-	S32 getIndices(LLStrider<U16> &indices);
 
 	void		setSize(S32 numVertices, S32 num_indices = 0, bool align = false);
 	
@@ -309,7 +294,7 @@ private:
 	bool        mIsMediaAllowed;
 
     U32 mDrawOrderIndex = 0; // see setDrawOrderIndex
-	
+
 protected:
 	static BOOL	sSafeRenderSelect;
 	

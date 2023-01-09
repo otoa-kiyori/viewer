@@ -63,11 +63,11 @@ public:
 	/*virtual*/ BOOL        updateGeometry(LLDrawable *drawable);
 	/*virtual*/ BOOL		updateLOD();
 	/*virtual*/ void		updateFaceSize(S32 idx);
-	void getGeometry(LLStrider<LLVector3> &verticesp,
-								LLStrider<LLVector3> &normalsp,
-								LLStrider<LLVector2> &texCoords0p,
-								LLStrider<LLVector2> &texCoords1p,
-								LLStrider<U16> &indicesp);
+	void getGeometry(LLVector4a* &verticesp,
+								LLVector4a* &normalsp,
+								LLVector2* &texCoords0p,
+								LLVector2* &texCoords1p,
+								U16* &indicesp);
 
 	/*virtual*/ void updateTextures();
 	/*virtual*/ void setPixelAreaAndAngle(LLAgent &agent); // generate accurate apparent angle and area
@@ -116,25 +116,25 @@ protected:
 								 S32 &num_vertices, S32 &num_indices);
 
 	void updateMainGeometry(LLFace *facep,
-					   LLStrider<LLVector3> &verticesp,
-					   LLStrider<LLVector3> &normalsp,
-					   LLStrider<LLVector2> &texCoords0p,
-					   LLStrider<LLVector2> &texCoords1p,
-					   LLStrider<U16> &indicesp,
+					   LLVector4a* &verticesp,
+					   LLVector4a* &normalsp,
+					   LLVector2* &texCoords0p,
+					   LLVector2* &texCoords1p,
+					   U16* &indicesp,
 					   U32 &index_offset);
 	void updateNorthGeometry(LLFace *facep,
-					   LLStrider<LLVector3> &verticesp,
-					   LLStrider<LLVector3> &normalsp,
-					   LLStrider<LLVector2> &texCoords0p,
-					   LLStrider<LLVector2> &texCoords1p,
-					   LLStrider<U16> &indicesp,
+					   LLVector4a* &verticesp,
+					   LLVector4a* &normalsp,
+					   LLVector2* &texCoords0p,
+					   LLVector2* &texCoords1p,
+					   U16* &indicesp,
 					   U32 &index_offset);
 	void updateEastGeometry(LLFace *facep,
-					   LLStrider<LLVector3> &verticesp,
-					   LLStrider<LLVector3> &normalsp,
-					   LLStrider<LLVector2> &texCoords0p,
-					   LLStrider<LLVector2> &texCoords1p,
-					   LLStrider<U16> &indicesp,
+					   LLVector4a* &verticesp,
+					   LLVector4a* &normalsp,
+					   LLVector2* &texCoords0p,
+					   LLVector2* &texCoords1p,
+					   U16* &indicesp,
 					   U32 &index_offset);
 };
 

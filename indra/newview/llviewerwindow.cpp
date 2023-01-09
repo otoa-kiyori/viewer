@@ -658,24 +658,6 @@ public:
 			
 			}
 
-			addText(xpos, ypos, llformat("%d MB Index Data (%d MB Pooled, %d KIndices)", LLVertexBuffer::sAllocatedIndexBytes/(1024*1024), LLVBOPool::sIndexBytesPooled/(1024*1024), LLVertexBuffer::sIndexCount/1024));
-			ypos += y_inc;
-
-			addText(xpos, ypos, llformat("%d MB Vertex Data (%d MB Pooled, %d KVerts)", LLVertexBuffer::sAllocatedBytes/(1024*1024), LLVBOPool::sBytesPooled/(1024*1024), LLVertexBuffer::sVertexCount/1024));
-			ypos += y_inc;
-
-			addText(xpos, ypos, llformat("%d Vertex Buffers", LLVertexBuffer::sGLCount));
-			ypos += y_inc;
-
-			addText(xpos, ypos, llformat("%d Mapped Buffers", LLVertexBuffer::sMappedCount));
-			ypos += y_inc;
-
-			addText(xpos, ypos, llformat("%d Vertex Buffer Binds", LLVertexBuffer::sBindCount));
-			ypos += y_inc;
-
-			addText(xpos, ypos, llformat("%d Vertex Buffer Sets", LLVertexBuffer::sSetCount));
-			ypos += y_inc;
-
 			addText(xpos, ypos, llformat("%d Texture Binds", LLImageGL::sBindCount));
 			ypos += y_inc;
 
@@ -750,8 +732,7 @@ public:
 				ypos += y_inc;
 			}
 
-			LLVertexBuffer::sBindCount = LLImageGL::sBindCount = 
-				LLVertexBuffer::sSetCount = LLImageGL::sUniqueCount = 
+			LLImageGL::sBindCount = LLImageGL::sUniqueCount = 
 				gPipeline.mNumVisibleNodes = LLPipeline::sVisibleLightCount = 0;
 		}
 		if (gSavedSettings.getBOOL("DebugShowAvatarRenderInfo"))
@@ -1974,7 +1955,7 @@ LLViewerWindow::LLViewerWindow(const Params& p)
 	LL_DEBUGS("Window") << "Loading feature tables." << LL_ENDL;
 
 	// Initialize OpenGL Renderer
-	LLVertexBuffer::initClass(gSavedSettings.getBOOL("RenderVBOEnable"), gSavedSettings.getBOOL("RenderVBOMappingDisable"));
+	LLVertexBuffer::initClass(mWindow);
 	LL_INFOS("RenderInit") << "LLVertexBuffer initialization done." << LL_ENDL ;
 	gGL.init(true);
 
@@ -2665,6 +2646,7 @@ void LLViewerWindow::drawDebugText()
 
 void LLViewerWindow::draw()
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_DISPLAY;
 	
 //#if LL_DEBUG
 	LLView::sIsDrawing = TRUE;
@@ -2743,7 +2725,10 @@ void LLViewerWindow::draw()
 
 		// Draw all nested UI views.
 		// No translation needed, this view is glued to 0,0
-		mRootView->draw();
+        {
+            LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("mRootView->draw()");
+            mRootView->draw();
+        }
 
 		if (LLView::sDebugRects)
 		{

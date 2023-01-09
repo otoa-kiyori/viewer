@@ -38,6 +38,9 @@ LLDrawPoolGLTFPBR::LLDrawPoolGLTFPBR() :
 
 void LLDrawPoolGLTFPBR::renderDeferred(S32 pass)
 {
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_DISPLAY;
+    LL_PROFILE_GPU_ZONE("deferred gltf");
+
     const U32 types[] = { LLPipeline::RENDER_TYPE_PASS_GLTF_PBR, LLPipeline::RENDER_TYPE_PASS_GLTF_PBR_ALPHA_MASK };
 
     for (U32 type : types)

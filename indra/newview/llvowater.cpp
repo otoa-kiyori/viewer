@@ -130,14 +130,6 @@ BOOL LLVOWater::updateGeometry(LLDrawable *drawable)
 		return TRUE;
 	}
 
-//	LLVector2 uvs[4];
-//	LLVector3 vtx[4];
-
-	LLStrider<LLVector3> verticesp, normalsp;
-	LLStrider<LLVector2> texCoordsp;
-	LLStrider<U16> indicesp;
-	U16 index_offset;
-
 
 	// A quad is 4 vertices and 6 indices (making 2 triangles)
 	static const unsigned int vertices_per_quad = 4;
@@ -149,30 +141,23 @@ BOOL LLVOWater::updateGeometry(LLDrawable *drawable)
 	face->setSize(vertices_per_quad * num_quads,
 				  indices_per_quad * num_quads);
 	
-	LLVertexBuffer* buff = face->getVertexBuffer();
-	if (!buff || !buff->isWriteable())
+	LLVertexBuffer* buff = new LLVertexBuffer(LLDrawPoolWater::VERTEX_DATA_MASK, GL_STATIC_DRAW);
+	if (!buff->allocateBuffer(face->getGeomCount(), face->getIndicesCount(), TRUE))
 	{
-		buff = new LLVertexBuffer(LLDrawPoolWater::VERTEX_DATA_MASK, GL_DYNAMIC_DRAW);
-		if (!buff->allocateBuffer(face->getGeomCount(), face->getIndicesCount(), TRUE))
-		{
-			LL_WARNS() << "Failed to allocate Vertex Buffer on water update to "
-				<< face->getGeomCount() << " vertices and "
-				<< face->getIndicesCount() << " indices" << LL_ENDL;
-		}
-		face->setIndicesIndex(0);
-		face->setGeomIndex(0);
-		face->setVertexBuffer(buff);
+		LL_WARNS() << "Failed to allocate Vertex Buffer on water update to "
+			<< face->getGeomCount() << " vertices and "
+			<< face->getIndicesCount() << " indices" << LL_ENDL;
 	}
-	else
-	{
-		if (!buff->resizeBuffer(face->getGeomCount(), face->getIndicesCount()))
-		{
-			LL_WARNS() << "Failed to resize Vertex Buffer" << LL_ENDL;
-		}
-	}
+	face->setIndicesIndex(0);
+	face->setGeomIndex(0);
+	face->setVertexBuffer(buff);
 		
-	index_offset = face->getGeometry(verticesp,normalsp,texCoordsp, indicesp);
-		
+    LLMappedVertexData md = buff->mapVertexBuffer();
+    U16* indicesp = buff->mapIndexBuffer();
+    LLVector4a* verticesp = md.mPosition;
+    LLVector4a* normalsp = md.mNormal;
+    LLVector2* texCoordsp = md.mTexCoord0;
+
 	LLVector3 position_agent;
 	position_agent = getPositionAgent();
 	face->mCenterAgent = position_agent;
@@ -184,7 +169,7 @@ BOOL LLVOWater::updateGeometry(LLDrawable *drawable)
 
 	const LLVector3 up(0.f, step_y * 0.5f, 0.f);
 	const LLVector3 right(step_x * 0.5f, 0.f, 0.f);
-	const LLVector3 normal(0.f, 0.f, 1.f);
+	const LLVector4a normal(0.f, 0.f, 1.f);
 
 	F32 size_inv = 1.f / size;
 
@@ -199,16 +184,16 @@ BOOL LLVOWater::updateGeometry(LLDrawable *drawable)
 	{
 		for (x = 0; x < size; x++)
 		{
-			S32 toffset = index_offset + 4*(y*size + x);
+			S32 toffset = 4*(y*size + x);
 			position_agent = getPositionAgent() - getScale() * 0.5f;
 			position_agent.mV[VX] += (x + 0.5f) * step_x;
 			position_agent.mV[VY] += (y + 0.5f) * step_y;
 			position_agent.mV[VZ] += z_fudge;
 
-			*verticesp++  = position_agent - right + up;
-			*verticesp++  = position_agent - right - up;
-			*verticesp++  = position_agent + right + up;
-			*verticesp++  = position_agent + right - up;
+			(*verticesp++).load3((position_agent - right + up).mV);
+			(*verticesp++).load3((position_agent - right - up).mV);
+			(*verticesp++).load3((position_agent + right + up).mV);
+			(*verticesp++).load3((position_agent + right - up).mV);
 
 			*texCoordsp++ = LLVector2(x*size_inv, (y+1)*size_inv);
 			*texCoordsp++ = LLVector2(x*size_inv, y*size_inv);
@@ -230,7 +215,8 @@ BOOL LLVOWater::updateGeometry(LLDrawable *drawable)
 		}
 	}
 	
-	buff->flush();
+    buff->unmapIndexBuffer();
+    buff->unmapVertexBuffer();
 
 	mDrawable->movePartition();
 	LLPipeline::sCompiles++;

@@ -559,10 +559,6 @@ void LLDrawPoolBump::renderGroup(LLSpatialGroup* group, U32 type, U32 mask, BOOL
 		
 		applyModelMatrix(params);
 
-		if (params.mGroup)
-		{
-			params.mGroup->rebuildMesh();
-		}
 		params.mVertexBuffer->setBuffer(mask);
 		params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 	}
@@ -704,6 +700,7 @@ S32 LLDrawPoolBump::getNumDeferredPasses()
 void LLDrawPoolBump::renderDeferred(S32 pass)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_DRAWPOOL; //LL_RECORD_BLOCK_TIME(FTM_RENDER_BUMP);
+    LL_PROFILE_GPU_ZONE("deferred bump");
 
     mShiny = TRUE;
     for (int i = 0; i < 2; ++i)
@@ -1433,12 +1430,8 @@ void LLDrawPoolBump::pushBatch(LLDrawInfo& params, U32 mask, BOOL texture, BOOL 
 		}
 	}
 
-	if (params.mGroup)
-	{
-		params.mGroup->rebuildMesh();
-	}
-	params.mVertexBuffer->setBufferFast(mask);
-	params.mVertexBuffer->drawRangeFast(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+	params.mVertexBuffer->setBuffer(mask);
+	params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
     if (tex_setup)
 	{

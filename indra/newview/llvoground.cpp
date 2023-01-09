@@ -75,11 +75,6 @@ LLDrawable *LLVOGround::createDrawable(LLPipeline *pipeline)
 // TO DO - this always returns TRUE, 
 BOOL LLVOGround::updateGeometry(LLDrawable *drawable)
 {
-	LLStrider<LLVector3> verticesp;
-	LLStrider<LLVector3> normalsp;
-	LLStrider<LLVector2> texCoordsp;
-	LLStrider<U16> indicesp;
-	S32 index_offset;
 	LLFace *face;	
 
 	LLDrawPoolGround *poolp = (LLDrawPoolGround*) gPipeline.getPool(LLDrawPool::POOL_GROUND);
@@ -90,26 +85,15 @@ BOOL LLVOGround::updateGeometry(LLDrawable *drawable)
 	if (!face)
 		return TRUE;
 		
-	if (!face->getVertexBuffer())
-	{
-		face->setSize(5, 12);
-		LLVertexBuffer* buff = new LLVertexBuffer(LLDrawPoolGround::VERTEX_DATA_MASK, GL_STREAM_DRAW);
-		if (!buff->allocateBuffer(face->getGeomCount(), face->getIndicesCount(), TRUE))
-		{
-			LL_WARNS() << "Failed to allocate Vertex Buffer for VOGround to "
-				<< face->getGeomCount() << " vertices and "
-				<< face->getIndicesCount() << " indices" << LL_ENDL;
-		}
-		face->setGeomIndex(0);
-		face->setIndicesIndex(0);
-		face->setVertexBuffer(buff);
-	}
+	face->setSize(5, 12);
+	LLVertexBuffer* buff = new LLVertexBuffer(LLDrawPoolGround::VERTEX_DATA_MASK, GL_STREAM_DRAW);
+    buff->allocateBuffer(face->getGeomCount(), face->getIndicesCount(), TRUE);
 	
-	index_offset = face->getGeometry(verticesp,normalsp,texCoordsp, indicesp);
-	if (-1 == index_offset)
-	{
-		return TRUE;
-	}
+    LLMappedVertexData md = buff->mapVertexBuffer();
+    U16* indicesp = buff->mapIndexBuffer();
+
+    LLVector4a* verticesp = md.mPosition;
+    LLVector2* texCoordsp = md.mTexCoord0;
 
 	///////////////////////////////////////
 	//
@@ -130,29 +114,29 @@ BOOL LLVOGround::updateGeometry(LLDrawable *drawable)
 	ground_color.mV[3] = 1.f;
 	face->setFaceColor(ground_color);
 	
-	*(verticesp++)  = LLVector3(64, 64, 0);
-	*(verticesp++)  = LLVector3(-64, 64, 0);
-	*(verticesp++)  = LLVector3(-64, -64, 0);
-	*(verticesp++)  = LLVector3(64, -64, 0);
-	*(verticesp++)  = LLVector3(0, 0, -1024);
+	*(verticesp++)  = LLVector4a(64, 64, 0);
+	*(verticesp++)  = LLVector4a(-64, 64, 0);
+	*(verticesp++)  = LLVector4a(-64, -64, 0);
+	*(verticesp++)  = LLVector4a(64, -64, 0);
+	*(verticesp++)  = LLVector4a(0, 0, -1024);
 	
 	
 	// Triangles for each side
-	*indicesp++ = index_offset + 0;
-	*indicesp++ = index_offset + 1;
-	*indicesp++ = index_offset + 4;
+	*indicesp++ = 0;
+	*indicesp++ = 1;
+	*indicesp++ = 4;
 
-	*indicesp++ = index_offset + 1;
-	*indicesp++ = index_offset + 2;
-	*indicesp++ = index_offset + 4;
+	*indicesp++ = 1;
+	*indicesp++ = 2;
+	*indicesp++ = 4;
 
-	*indicesp++ = index_offset + 2;
-	*indicesp++ = index_offset + 3;
-	*indicesp++ = index_offset + 4;
+	*indicesp++ = 2;
+	*indicesp++ = 3;
+	*indicesp++ = 4;
 
-	*indicesp++ = index_offset + 3;
-	*indicesp++ = index_offset + 0;
-	*indicesp++ = index_offset + 4;
+	*indicesp++ = 3;
+	*indicesp++ = 0;
+	*indicesp++ = 4;
 
 	*(texCoordsp++) = LLVector2(0.f, 0.f);
 	*(texCoordsp++) = LLVector2(1.f, 0.f);
@@ -160,7 +144,9 @@ BOOL LLVOGround::updateGeometry(LLDrawable *drawable)
 	*(texCoordsp++) = LLVector2(0.f, 1.f);
 	*(texCoordsp++) = LLVector2(0.5f, 0.5f);
 	
-	face->getVertexBuffer()->flush();
+    buff->unmapIndexBuffer();
+    buff->unmapVertexBuffer();
+
 	LLPipeline::sCompiles++;
 	return TRUE;
 }

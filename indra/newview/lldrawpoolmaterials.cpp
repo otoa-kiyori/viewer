@@ -121,6 +121,9 @@ void LLDrawPoolMaterials::endDeferredPass(S32 pass)
 void LLDrawPoolMaterials::renderDeferred(S32 pass)
 {
     LL_PROFILE_ZONE_SCOPED_CATEGORY_MATERIAL;
+
+    LL_PROFILE_GPU_ZONE("deferred materials");
+   
 	static const U32 type_list[] = 
 	{
 		LLRenderPass::PASS_MATERIAL,
@@ -150,11 +153,14 @@ void LLDrawPoolMaterials::renderDeferred(S32 pass)
 
 	llassert(pass < sizeof(type_list)/sizeof(U32));
 
+
 	U32 type = type_list[pass];
     if (rigged)
     {
         type += 1;
     }
+
+    LL_PROFILE_ZONE_NUM(type);
 
 	U32 mask = mShader->mAttributeMask;
 
@@ -297,13 +303,8 @@ void LLDrawPoolMaterials::renderDeferred(S32 pass)
             tex_setup = true;
         }
 
-        /*if (params.mGroup)  // TOO LATE
-        {
-            params.mGroup->rebuildMesh();
-        }*/
-
-        params.mVertexBuffer->setBufferFast(mask);
-        params.mVertexBuffer->drawRangeFast(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
+        params.mVertexBuffer->setBuffer(mask);
+        params.mVertexBuffer->drawRange(LLRender::TRIANGLES, params.mStart, params.mEnd, params.mCount, params.mOffset);
 
         if (tex_setup)
         {

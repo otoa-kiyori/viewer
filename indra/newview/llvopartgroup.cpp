@@ -77,18 +77,14 @@ void LLVOPartGroup::restoreGL()
 		return;
 	}
 
-	//indices and texcoords are always the same, set once
-	LLStrider<U16> indicesp;
+    LLMappedVertexData md = sVB->mapVertexBuffer();
+    U16* indicesp = sVB->mapIndexBuffer();
 
-	LLStrider<LLVector4a> verticesp;
-
-	sVB->getIndexStrider(indicesp);
-	sVB->getVertexStrider(verticesp);
-
+    LLVector4a* verticesp = md.mPosition;
+   
 	LLVector4a v;
 	v.set(0,0,0,0);
 
-	
 	U16 vert_offset = 0;
 
 	for (U32 i = 0; i < LL_MAX_PARTICLE_COUNT; i++)
@@ -105,9 +101,9 @@ void LLVOPartGroup::restoreGL()
 
 		vert_offset += 4;
 	}
+    
 
-	LLStrider<LLVector2> texcoordsp;
-	sVB->getTexCoord0Strider(texcoordsp);
+    LLVector2* texcoordsp = md.mTexCoord0;
 
 	for (U32 i = 0; i < LL_MAX_PARTICLE_COUNT; i++)
 	{
@@ -117,7 +113,8 @@ void LLVOPartGroup::restoreGL()
 		*texcoordsp++ = LLVector2(1.f, 0.f);
 	}
 
-	sVB->flush();
+    sVB->unmapIndexBuffer();
+    sVB->unmapVertexBuffer();
 
 }
 
@@ -503,7 +500,7 @@ BOOL LLVOPartGroup::lineSegmentIntersect(const LLVector4a& start, const LLVector
 		const LLViewerPart &part = *((LLViewerPart*) (mViewerPartGroupp->mParticles[idx]));
 
 		LLVector4a v[4];
-		LLStrider<LLVector4a> verticesp;
+		LLVector4a* verticesp;
 		verticesp = v;
 		
 		getGeometry(part, verticesp);
@@ -537,7 +534,7 @@ BOOL LLVOPartGroup::lineSegmentIntersect(const LLVector4a& start, const LLVector
 }
 
 void LLVOPartGroup::getGeometry(const LLViewerPart& part,
-								LLStrider<LLVector4a>& verticesp)
+								LLVector4a* &verticesp)
 {
 	if (part.mFlags & LLPartData::LL_PART_RIBBON_MASK)
 	{
@@ -668,12 +665,12 @@ void LLVOPartGroup::getGeometry(const LLViewerPart& part,
 
 								
 void LLVOPartGroup::getGeometry(S32 idx,
-								LLStrider<LLVector4a>& verticesp,
-								LLStrider<LLVector3>& normalsp, 
-								LLStrider<LLVector2>& texcoordsp,
-								LLStrider<LLColor4U>& colorsp, 
-								LLStrider<LLColor4U>& emissivep,
-								LLStrider<U16>& indicesp)
+								LLVector4a* &verticesp,
+								LLVector4a* &normalsp, 
+								LLVector2* &texcoordsp,
+								LLColor4U* &colorsp, 
+								LLColor4U* &emissivep,
+								U16* &indicesp)
 {
 	if (idx >= (S32) mViewerPartGroupp->mParticles.size())
 	{
@@ -724,7 +721,9 @@ void LLVOPartGroup::getGeometry(S32 idx,
 
 	if (!(part.mFlags & LLPartData::LL_PART_EMISSIVE_MASK))
 	{ //not fullbright, needs normal
-		LLVector3 normal = -LLViewerCamera::getInstance()->getXAxis();
+        LLVector3 at = -LLViewerCamera::getInstance()->getXAxis();
+        LLVector4a normal;
+        normal.load3(at.mV);
 		*normalsp++   = normal;
 		*normalsp++   = normal;
 		*normalsp++   = normal;
@@ -849,20 +848,20 @@ void LLParticlePartition::getGeometry(LLSpatialGroup* group)
 
 	group->clearDrawMap();
 
-	LLVertexBuffer* buffer = group->mVertexBuffer;
+    // always allocate a new buffer, never attempt to reuse a buffer
+	LLVertexBuffer* buffer = new LLVertexBuffer(group->mVertexBuffer->getTypeMask(), GL_STATIC_DRAW);
+    buffer->allocateBuffer(group->mVertexBuffer->getNumVerts(), group->mVertexBuffer->getNumIndices(), true);
+    group->mVertexBuffer = buffer;
 
-	LLStrider<U16> indicesp;
-	LLStrider<LLVector4a> verticesp;
-	LLStrider<LLVector3> normalsp;
-	LLStrider<LLVector2> texcoordsp;
-	LLStrider<LLColor4U> colorsp;
-	LLStrider<LLColor4U> emissivep;
+    LLMappedVertexData md = buffer->mapVertexBuffer();
+    U16* indicesp = buffer->mapIndexBuffer();
 
-	buffer->getVertexStrider(verticesp);
-	buffer->getNormalStrider(normalsp);
-	buffer->getColorStrider(colorsp);
-	buffer->getEmissiveStrider(emissivep);
-
+	
+    LLVector4a* verticesp = md.mPosition;
+    LLVector2* texcoordsp = md.mTexCoord0;
+    LLVector4a* normalsp = md.mNormal;
+    LLColor4U* colorsp = md.mColor;
+    LLColor4U* emissivep = md.mEmissive;
 	
 	LLSpatialGroup::drawmap_elem_t& draw_vec = group->mDrawMap[mRenderPass];	
 
@@ -890,20 +889,20 @@ void LLParticlePartition::getGeometry(LLSpatialGroup* group)
 
 		S32 geom_idx = (S32) facep->getGeomIndex();
 
-		LLStrider<U16> cur_idx = indicesp + facep->getIndicesStart();
-		LLStrider<LLVector4a> cur_vert = verticesp + geom_idx;
-		LLStrider<LLVector3> cur_norm = normalsp + geom_idx;
-		LLStrider<LLVector2> cur_tc = texcoordsp + geom_idx;
-		LLStrider<LLColor4U> cur_col = colorsp + geom_idx;
-		LLStrider<LLColor4U> cur_glow = emissivep + geom_idx;
+		U16* cur_idx = indicesp + facep->getIndicesStart();
+		LLVector4a* cur_vert = verticesp + geom_idx;
+		LLVector4a* cur_norm = normalsp + geom_idx;
+		LLVector2* cur_tc = texcoordsp + geom_idx;
+		LLColor4U* cur_col = colorsp + geom_idx;
+		LLColor4U* cur_glow = emissivep + geom_idx;
 
-		LLColor4U* start_glow = cur_glow.get();
+		LLColor4U* start_glow = cur_glow;
 
 		object->getGeometry(facep->getTEOffset(), cur_vert, cur_norm, cur_tc, cur_col, cur_glow, cur_idx);
 		
 		BOOL has_glow = FALSE;
 
-		if (cur_glow.get() != start_glow)
+		if (cur_glow != start_glow)
 		{
 			has_glow = TRUE;
 		}
@@ -963,9 +962,6 @@ void LLParticlePartition::getGeometry(LLSpatialGroup* group)
 			LLDrawInfo* info = new LLDrawInfo(start,end,count,offset,facep->getTexture(), 
 				buffer, object->isSelected(), fullbright);
 
-			const LLVector4a* exts = group->getObjectExtents();
-			info->mExtents[0] = exts[0];
-			info->mExtents[1] = exts[1];
 			info->mVSize = vsize;
 			info->mBlendFuncDst = bf_dst;
 			info->mBlendFuncSrc = bf_src;
@@ -977,6 +973,8 @@ void LLParticlePartition::getGeometry(LLSpatialGroup* group)
 		}
 	}
 
+    buffer->unmapIndexBuffer();
+    buffer->unmapVertexBuffer();
 	mFaceList.clear();
 }
 

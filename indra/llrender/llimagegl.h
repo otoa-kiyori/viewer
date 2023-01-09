@@ -322,13 +322,13 @@ public:
 
 };
 
-class LLImageGLThread : public LLSimpleton<LLImageGLThread>, LL::ThreadPool
+class LLGLThread : LL::ThreadPool
 {
 public:
     // follows gSavedSettings "RenderGLMultiThreaded"
     static bool sEnabled;
-    
-    LLImageGLThread(LLWindow* window);
+
+    LLGLThread(LLWindow* window, const std::string& name);
 
     // post a function to be executed on the LLImageGL background thread
     template <typename CALLABLE>
@@ -343,6 +343,13 @@ private:
     LLWindow* mWindow;
     void* mContext = nullptr;
     LLAtomicBool mFinished;
+};
+
+
+class LLImageGLThread : public LLSimpleton<LLImageGLThread>, public LLGLThread
+{
+public:
+    LLImageGLThread(LLWindow* window);
 };
 
 

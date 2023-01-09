@@ -284,7 +284,16 @@ static LLStaticHashedString sKernScale("kern_scale");
 
 void drawBox(const LLVector4a& c, const LLVector4a& r);
 void drawBoxOutline(const LLVector3& pos, const LLVector3& size);
-U32 nhpo2(U32 v);
+//Next Highest Power Of Two
+//helper function, returns first number > v that is a power of 2, or v if v is already a power of 2
+U32 nhpo2(U32 v)
+{
+    U32 r = 1;
+    while (r < v) {
+        r *= 2;
+    }
+    return r;
+}
 LLVertexBuffer* ll_create_cube_vb(U32 type_mask, U32 usage);
 
 void display_update_camera();
@@ -416,9 +425,6 @@ void LLPipeline::init()
 	gOctreeMinSize = gSavedSettings.getF32("OctreeMinimumNodeSize");
 	sDynamicLOD = gSavedSettings.getBOOL("RenderDynamicLOD");
     sRenderBump = TRUE; // DEPRECATED -- gSavedSettings.getBOOL("RenderObjectBump");
-	LLVertexBuffer::sUseStreamDraw = gSavedSettings.getBOOL("RenderUseStreamVBO");
-	LLVertexBuffer::sUseVAO = gSavedSettings.getBOOL("RenderUseVAO");
-	LLVertexBuffer::sPreferStreamDraw = gSavedSettings.getBOOL("RenderPreferStreamDraw");
 	sRenderAttachedLights = gSavedSettings.getBOOL("RenderAttachedLights");
 	sRenderAttachedParticles = gSavedSettings.getBOOL("RenderAttachedParticles");
 
@@ -501,20 +507,17 @@ void LLPipeline::init()
 		mCubeVB = ll_create_cube_vb(LLVertexBuffer::MAP_VERTEX, GL_STATIC_DRAW);
 	}
 
-	mDeferredVB = new LLVertexBuffer(DEFERRED_VB_MASK, 0);
-	mDeferredVB->allocateBuffer(8, 0, true);
-
     {
         mScreenTriangleVB = new LLVertexBuffer(LLVertexBuffer::MAP_VERTEX, GL_STATIC_DRAW);
         mScreenTriangleVB->allocateBuffer(3, 0, true);
-        LLStrider<LLVector3> vert;
-        mScreenTriangleVB->getVertexStrider(vert);
-
+        LLMappedVertexData md = mScreenTriangleVB->mapVertexBuffer();
+        LLVector4a* vert = md.mPosition;
+        
         vert[0].set(-1, 1, 0);
         vert[1].set(-1, -3, 0);
         vert[2].set(3, 1, 0);
 
-        mScreenTriangleVB->flush();
+        mScreenTriangleVB->unmapVertexBuffer();
     }
 
     setLightingDetail(-1);
@@ -705,11 +708,6 @@ void LLPipeline::destroyGL()
 	resetVertexBuffers();
 
 	releaseGLBuffers();
-
-	if (LLVertexBuffer::sEnableVBOs)
-	{
-		LLVertexBuffer::sEnableVBOs = FALSE;
-	}
 
 	if (mMeshDirtyQueryObject)
 	{
@@ -2581,14 +2579,6 @@ void LLPipeline::downsampleDepthBuffer(LLRenderTarget& source, LLRenderTarget& d
 	dest.bindTarget();
 	dest.clear(GL_DEPTH_BUFFER_BIT);
 
-	LLStrider<LLVector3> vert; 
-	mDeferredVB->getVertexStrider(vert);
-	LLStrider<LLVector2> tc0;
-		
-	vert[0].set(-1,1,0);
-	vert[1].set(-1,-3,0);
-	vert[2].set(3,1,0);
-	
 	if (source.getUsage() == LLTexUnit::TT_TEXTURE)
 	{
 		shader = &gDownsampleDepthRectProgram;
@@ -2608,8 +2598,8 @@ void LLPipeline::downsampleDepthBuffer(LLRenderTarget& source, LLRenderTarget& d
 
 	{
 		LLGLDepthTest depth(GL_TRUE, GL_TRUE, GL_ALWAYS);
-		mDeferredVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
-		mDeferredVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+		mScreenTriangleVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
+        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
 	}
 	
 	dest.flush();
@@ -2740,10 +2730,6 @@ void LLPipeline::updateGL()
 			glu->mInQ = FALSE;
 			LLGLUpdate::sGLQ.pop_front();
 		}
-	}
-
-	{ //seed VBO Pools
-		LLVertexBuffer::seedPools();
 	}
 }
 
@@ -3189,10 +3175,7 @@ void LLPipeline::shiftObjects(const LLVector3 &offset)
 
 void LLPipeline::markTextured(LLDrawable *drawablep)
 {
-	if (drawablep && !drawablep->isDead() && assertInitialized())
-	{
-		mRetexturedList.insert(drawablep);
-	}
+    markRebuild(drawablep);
 }
 
 void LLPipeline::markGLRebuild(LLGLUpdate* glu)
@@ -3312,6 +3295,15 @@ void LLPipeline::markRebuild(LLDrawable *drawablep, LLDrawable::EDrawableFlags f
 		{
 			drawablep->getVObj()->setChanged(LLXform::SILHOUETTE);
 		}
+
+
+#if 0
+        if (drawablep->getVOVolume() && !drawablep->getVObj()->isShrinkWrapped())
+        {
+            LL_WARNS() << "WTF" << LL_ENDL;
+        }
+#endif
+
 		drawablep->setState(flag);
 	}
 }
@@ -3352,11 +3344,6 @@ void LLPipeline::stateSort(LLCamera& camera, LLCullResult &result)
 			{
                 LLDrawable* drawablep = (LLDrawable*)(*i)->getDrawable();
 				markVisible(drawablep, camera);
-			}
-
-			if (!sDelayVBUpdate)
-			{ //rebuild mesh as soon as we know it's visible
-				group->rebuildMesh();
 			}
 		}
 	}
@@ -3409,11 +3396,6 @@ void LLPipeline::stateSort(LLCamera& camera, LLCullResult &result)
 		{
 			group->setVisible();
 			stateSort(group, camera);
-
-			if (!sDelayVBUpdate)
-			{ //rebuild mesh as soon as we know it's visible
-				group->rebuildMesh();
-			}
 		}
 	}
 	
@@ -3924,16 +3906,6 @@ void LLPipeline::postSort(LLCamera &camera)
         }
     }
 
-    // flush particle VB
-    if (LLVOPartGroup::sVB)
-    {
-        LLVOPartGroup::sVB->flush();
-    }
-    else
-    {
-        LL_WARNS_ONCE() << "Missing particle buffer" << LL_ENDL;
-    }
-
     /*bool use_transform_feedback = gTransformPositionProgram.mProgramObject && !mMeshDirtyGroup.empty();
 
     if (use_transform_feedback)
@@ -3948,12 +3920,6 @@ void LLPipeline::postSort(LLCamera &camera)
 
         glBeginQuery(GL_TRANSFORM_FEEDBACK_PRIMITIVES_WRITTEN, mMeshDirtyQueryObject);
     }*/
-
-    // pack vertex buffers for groups that chose to delay their updates
-    for (LLSpatialGroup::sg_vector_t::iterator iter = mMeshDirtyGroup.begin(); iter != mMeshDirtyGroup.end(); ++iter)
-    {
-        (*iter)->rebuildMesh();
-    }
 
     /*if (use_transform_feedback)
     {
@@ -7347,34 +7313,15 @@ void LLPipeline::doResetVertexBuffers(bool forced)
 		LLPathingLib::getInstance()->cleanupVBOManager();
 	}
 	LLVOPartGroup::destroyGL();
-    gGL.resetVertexBuffer();
-
-	SUBSYSTEM_CLEANUP(LLVertexBuffer);
-	
-	if (LLVertexBuffer::sGLCount != 0)
-	{
-		LL_WARNS() << "VBO wipe failed -- " << LLVertexBuffer::sGLCount << " buffers remaining." << LL_ENDL;
-	}
-
+    
 	LLVertexBuffer::unbind();	
 	
 	updateRenderBump();
 	updateRenderDeferred();
 
-	LLVertexBuffer::sUseStreamDraw = gSavedSettings.getBOOL("RenderUseStreamVBO");
-	LLVertexBuffer::sUseVAO = gSavedSettings.getBOOL("RenderUseVAO");
-	LLVertexBuffer::sPreferStreamDraw = gSavedSettings.getBOOL("RenderPreferStreamDraw");
-	LLVertexBuffer::sEnableVBOs = gSavedSettings.getBOOL("RenderVBOEnable");
-	LLVertexBuffer::sDisableVBOMapping = LLVertexBuffer::sEnableVBOs && gSavedSettings.getBOOL("RenderVBOMappingDisable") ;
 	sBakeSunlight = gSavedSettings.getBOOL("RenderBakeSunlight");
 	sNoAlpha = gSavedSettings.getBOOL("RenderNoAlpha");
 	LLPipeline::sTextureBindTest = gSavedSettings.getBOOL("RenderDebugTextureBind");
-
-	LLVertexBuffer::initClass(LLVertexBuffer::sEnableVBOs, LLVertexBuffer::sDisableVBOMapping);
-    gGL.initVertexBuffer();
-
-    mDeferredVB = new LLVertexBuffer(DEFERRED_VB_MASK, 0);
-    mDeferredVB->allocateBuffer(8, 0, true);
 
 	LLVOPartGroup::restoreGL();
 }
@@ -7395,6 +7342,34 @@ void LLPipeline::renderObjects(U32 type, U32 mask, bool texture, bool batch_text
 	gGL.loadMatrix(gGLModelView);
 	gGLLastMatrix = NULL;		
 }
+
+void LLPipeline::renderShadowSimple(U32 type)
+{
+    LL_PROFILE_ZONE_SCOPED_CATEGORY_PIPELINE;
+    assertInitialized();
+    gGL.loadMatrix(gGLModelView);
+    gGLLastMatrix = NULL;
+
+    LLVertexBuffer* last_vb = nullptr;
+
+    for (LLCullResult::drawinfo_iterator i = gPipeline.beginRenderMap(type); i != gPipeline.endRenderMap(type); ++i)
+    {
+        LLDrawInfo& params = **i;
+
+        LLVertexBuffer* vb = params.mVertexBuffer;
+        if (vb != last_vb)
+        {
+            LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("push shadow simple");
+            mSimplePool->applyModelMatrix(params);
+            vb->setBuffer(LLVertexBuffer::MAP_VERTEX);
+            vb->drawRange(LLRender::TRIANGLES, 0, vb->getNumVerts(), vb->getNumIndices(), 0);
+            vb = last_vb;
+        }
+    }
+    gGL.loadMatrix(gGLModelView);
+    gGLLastMatrix = NULL;
+}
+
 
 void LLPipeline::renderAlphaObjects(U32 mask, bool texture, bool batch_texture, bool rigged)
 {
@@ -7608,7 +7583,7 @@ void LLPipeline::renderFinalize()
 
             // Apply gamma correction to the frame here.
             gDeferredPostGammaCorrectProgram.bind();
-            // mDeferredVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
+
             S32 channel = 0;
             channel = gDeferredPostGammaCorrectProgram.enableTexture(LLShaderMgr::DEFERRED_DIFFUSE, screen_target->getUsage());
             if (channel > -1)
@@ -8116,7 +8091,7 @@ void LLPipeline::renderFinalize()
     else // not deferred
     {
         U32 mask = LLVertexBuffer::MAP_VERTEX | LLVertexBuffer::MAP_TEXCOORD0 | LLVertexBuffer::MAP_TEXCOORD1;
-        LLPointer<LLVertexBuffer> buff = new LLVertexBuffer(mask, 0);
+        LLPointer<LLVertexBuffer> buff = new LLVertexBuffer(mask, GL_STREAM_DRAW);
         buff->allocateBuffer(3, 0, TRUE);
 
         LLStrider<LLVector3> v;
@@ -8585,13 +8560,6 @@ void LLPipeline::renderDeferredLighting()
 
         glh::matrix4f mat = copy_matrix(gGLModelView);
 
-        LLStrider<LLVector3> vert;
-        mDeferredVB->getVertexStrider(vert);
-
-        vert[0].set(-1, 1, 0);
-        vert[1].set(-1, -3, 0);
-        vert[2].set(3, 1, 0);
-
         setupHWLights(NULL);  // to set mSun/MoonDir;
 
         glh::vec4f tc(mSunDir.mV);
@@ -8609,7 +8577,7 @@ void LLPipeline::renderDeferredLighting()
             {  // paint shadow/SSAO light map (direct lighting lightmap)
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("renderDeferredLighting - sun shadow");
                 bindDeferredShader(gDeferredSunProgram, deferred_light_target);
-                mDeferredVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
+                mScreenTriangleVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
                 glClearColor(1, 1, 1, 1);
                 deferred_light_target->clear(GL_COLOR_BUFFER_BIT);
                 glClearColor(0, 0, 0, 0);
@@ -8642,7 +8610,7 @@ void LLPipeline::renderDeferredLighting()
                     LLGLDisable   blend(GL_BLEND);
                     LLGLDepthTest depth(GL_TRUE, GL_FALSE, GL_ALWAYS);
                     stop_glerror();
-                    mDeferredVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+                    mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
                     stop_glerror();
                 }
 
@@ -8673,7 +8641,7 @@ void LLPipeline::renderDeferredLighting()
                 glClearColor(0, 0, 0, 0);
 
                 bindDeferredShader(gDeferredBlurLightProgram);
-                mDeferredVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
+                mScreenTriangleVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
                 LLVector3 go = RenderShadowGaussian;
                 const U32 kern_length = 4;
                 F32       blur_size = RenderShadowBlurSize;
@@ -8703,7 +8671,7 @@ void LLPipeline::renderDeferredLighting()
                     LLGLDisable   blend(GL_BLEND);
                     LLGLDepthTest depth(GL_TRUE, GL_FALSE, GL_ALWAYS);
                     stop_glerror();
-                    mDeferredVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+                    mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
                     stop_glerror();
                 }
 
@@ -8712,7 +8680,7 @@ void LLPipeline::renderDeferredLighting()
 
                 bindDeferredShader(gDeferredBlurLightProgram, screen_target);
 
-                mDeferredVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
+                mScreenTriangleVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
                 deferred_light_target->bindTarget();
 
                 gDeferredBlurLightProgram.uniform2f(sDelta, 0.f, 1.f);
@@ -8721,7 +8689,7 @@ void LLPipeline::renderDeferredLighting()
                     LLGLDisable   blend(GL_BLEND);
                     LLGLDepthTest depth(GL_TRUE, GL_FALSE, GL_ALWAYS);
                     stop_glerror();
-                    mDeferredVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+                    mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
                     stop_glerror();
                 }
                 deferred_light_target->flush();
@@ -8764,9 +8732,9 @@ void LLPipeline::renderDeferredLighting()
 
                 // full screen blit
 
-                mDeferredVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
+                mScreenTriangleVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
 
-                mDeferredVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+                mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
 
             }
 
@@ -8960,11 +8928,6 @@ void LLPipeline::renderDeferredLighting()
             }
 
             // reset mDeferredVB to fullscreen triangle
-            mDeferredVB->getVertexStrider(vert);
-            vert[0].set(-1, 1, 0);
-            vert[1].set(-1, -3, 0);
-            vert[2].set(3, 1, 0);
-
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("renderDeferredLighting - fullscreen lights");
                 LLGLDepthTest depth(GL_FALSE);
@@ -8997,8 +8960,8 @@ void LLPipeline::renderDeferredLighting()
                         gDeferredMultiLightProgram[idx].uniform1f(LLShaderMgr::MULTI_LIGHT_FAR_Z, far_z);
                         far_z = 0.f;
                         count = 0;
-                        mDeferredVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
-                        mDeferredVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+                        mScreenTriangleVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
+                        mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
                         unbindDeferredShader(gDeferredMultiLightProgram[idx]);
                     }
                 }
@@ -9007,7 +8970,7 @@ void LLPipeline::renderDeferredLighting()
 
                 gDeferredMultiSpotLightProgram.enableTexture(LLShaderMgr::DEFERRED_PROJECTION);
 
-                mDeferredVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
+                mScreenTriangleVB->setBuffer(LLVertexBuffer::MAP_VERTEX);
 
                 for (LLDrawable::drawable_list_t::iterator iter = fullscreen_spot_lights.begin(); iter != fullscreen_spot_lights.end(); ++iter)
                 {
@@ -9032,7 +8995,7 @@ void LLPipeline::renderDeferredLighting()
                     gDeferredMultiSpotLightProgram.uniform1f(LLShaderMgr::LIGHT_SIZE, light_size_final);
                     gDeferredMultiSpotLightProgram.uniform3fv(LLShaderMgr::DIFFUSE_COLOR, 1, col.mV);
                     gDeferredMultiSpotLightProgram.uniform1f(LLShaderMgr::LIGHT_FALLOFF, light_falloff_final);
-                    mDeferredVB->drawArrays(LLRender::TRIANGLES, 0, 3);
+                    mScreenTriangleVB->drawArrays(LLRender::TRIANGLES, 0, 3);
                 }
 
                 gDeferredMultiSpotLightProgram.disableTexture(LLShaderMgr::DEFERRED_PROJECTION);
@@ -9450,8 +9413,8 @@ void LLPipeline::renderShadow(glh::matrix4f& view, glh::matrix4f& proj, LLCamera
 
     LLGLEnable cull(GL_CULL_FACE);
 
-    //enable depth clamping if available
-    //LLGLEnable depth_clamp(GL_DEPTH_CLAMP);
+    //enable depth clamping
+    LLGLEnable depth_clamp(GL_DEPTH_CLAMP);
 
     if (use_shader)
     {
@@ -9467,7 +9430,6 @@ void LLPipeline::renderShadow(glh::matrix4f& view, glh::matrix4f& proj, LLCamera
     occlusion_target.flush();
 
     stateSort(shadow_cam, result);
-
 
     //generate shadow map
     gGL.matrixMode(LLRender::MM_PROJECTION);
@@ -9487,6 +9449,22 @@ void LLPipeline::renderShadow(glh::matrix4f& view, glh::matrix4f& proj, LLCamera
     LLEnvironment& environment = LLEnvironment::instance();
 
     LLVertexBuffer::unbind();
+
+    struct CompareVertexBuffer
+    {
+        bool operator()(const LLDrawInfo* const& lhs, const LLDrawInfo* const& rhs)
+        {
+            return lhs->mVertexBuffer > rhs->mVertexBuffer;
+        }
+    };
+
+    struct CompareTexture
+    {
+        bool operator()(const LLDrawInfo* const& lhs, const LLDrawInfo* const& rhs)
+        {
+            return lhs->mTexture > rhs->mTexture;
+        }
+    };
 
     for (int j = 0; j < 2; ++j) // 0 -- static, 1 -- rigged
     {
@@ -9514,17 +9492,29 @@ void LLPipeline::renderShadow(glh::matrix4f& view, glh::matrix4f& proj, LLCamera
         LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow simple"); //LL_RECORD_BLOCK_TIME(FTM_SHADOW_SIMPLE);
         LL_PROFILE_GPU_ZONE("shadow simple");
         gGL.getTexUnit(0)->disable();
-        for (U32 i = 0; i < sizeof(types) / sizeof(U32); ++i)
+
+        for (U32 type : types)
         {
-            renderObjects(types[i], LLVertexBuffer::MAP_VERTEX, FALSE, FALSE, rigged);
+            if (!rigged)
+            {
+                LL_PROFILE_ZONE_NAMED_CATEGORY_DISPLAY("sort shadow simple");
+                //std::sort(sCull->beginRenderMap(type), sCull->endRenderMap(type), CompareVertexBuffer());
+            }
+            if (rigged)
+            {
+                renderObjects(type, LLVertexBuffer::MAP_VERTEX, FALSE, FALSE, rigged);
+            }
+            else
+            {
+                renderShadowSimple(type);
+            }
         }
+
         gGL.getTexUnit(0)->enable(LLTexUnit::TT_TEXTURE);
         if (!use_shader)
         {
             gOcclusionProgram.unbind();
         }
-
-
     }
 
     if (use_shader)
@@ -9562,17 +9552,27 @@ void LLPipeline::renderShadow(glh::matrix4f& view, glh::matrix4f& proj, LLCamera
 
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow alpha masked");
+                LL_PROFILE_GPU_ZONE("shadow alpha masked");
                 renderMaskedObjects(LLRenderPass::PASS_ALPHA_MASK, mask, TRUE, TRUE, rigged);
             }
 
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow alpha blend");
+                LL_PROFILE_GPU_ZONE("shadow alpha blend");
                 LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(0.598f);
+
+                if (!rigged)
+                {
+                    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow normspec mask sort");
+                    //U32 type = LLRenderPass::PASS_ALPHA;
+                    //std::sort(sCull->beginRenderMap(type), sCull->endRenderMap(type), CompareVertexBuffer());
+                }
                 renderAlphaObjects(mask, TRUE, TRUE, rigged);
             }
 
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow fullbright alpha masked");
+                LL_PROFILE_GPU_ZONE("shadow fullbright alpha masked");
                 gDeferredShadowFullbrightAlphaMaskProgram.bind(rigged);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
                 LLGLSLShader::sCurBoundShaderPtr->uniform1i(LLShaderMgr::SUN_UP_FACTOR, environment.getIsSunUp() ? 1 : 0);
@@ -9581,23 +9581,63 @@ void LLPipeline::renderShadow(glh::matrix4f& view, glh::matrix4f& proj, LLCamera
 
             {
                 LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow alpha grass");
+                LL_PROFILE_GPU_ZONE("shadow alpha grass");
                 gDeferredTreeShadowProgram.bind(rigged);
+                
                 if (i == 0)
                 {
+                    LL_PROFILE_GPU_ZONE("shadow grass");
                     LLGLSLShader::sCurBoundShaderPtr->setMinimumAlpha(0.598f);
                     renderObjects(LLRenderPass::PASS_GRASS, LLVertexBuffer::MAP_VERTEX | LLVertexBuffer::MAP_TEXCOORD0, TRUE);
                 }
+                
 
                 U32 no_idx_mask = mask & ~LLVertexBuffer::MAP_TEXTURE_INDEX;
-                renderMaskedObjects(LLRenderPass::PASS_NORMSPEC_MASK, no_idx_mask, true, false, rigged);
-                renderMaskedObjects(LLRenderPass::PASS_MATERIAL_ALPHA_MASK, no_idx_mask, true, false, rigged);
-                renderMaskedObjects(LLRenderPass::PASS_SPECMAP_MASK, no_idx_mask, true, false, rigged);
-                renderMaskedObjects(LLRenderPass::PASS_NORMMAP_MASK, no_idx_mask, true, false, rigged);
+                {
+                    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow normspec mask");
+                    LL_PROFILE_GPU_ZONE("shadow normspec mask");
+                    if (!rigged)
+                    {
+                        LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow normspec mask sort");
+                        //U32 type = LLRenderPass::PASS_NORMSPEC_MASK;
+                        //std::sort(sCull->beginRenderMap(type), sCull->endRenderMap(type), CompareTexture());
+                    }
+                    renderMaskedObjects(LLRenderPass::PASS_NORMSPEC_MASK, no_idx_mask, true, false, rigged);
+                }
+                {
+                    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow material alpha mask");
+                    LL_PROFILE_GPU_ZONE("shadow material alpha mask");
+                    renderMaskedObjects(LLRenderPass::PASS_MATERIAL_ALPHA_MASK, no_idx_mask, true, false, rigged);
+                }
+                {
+                    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow specmap mask");
+                    LL_PROFILE_GPU_ZONE("shadow specmap mask");
+                    if (!rigged)
+                    {
+                        LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow specmap mask sort");
+                        //U32 type = LLRenderPass::PASS_SPECMAP_MASK;
+                        //std::sort(sCull->beginRenderMap(type), sCull->endRenderMap(type), CompareTexture());
+                    }
+                    renderMaskedObjects(LLRenderPass::PASS_SPECMAP_MASK, no_idx_mask, true, false, rigged);
+                }
+                {
+                    LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow normmap mask");
+                    LL_PROFILE_GPU_ZONE("shadow normmap mask");
+                    if (!rigged)
+                    {
+                        LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("shadow normmap mask sort");
+                        //U32 type = LLRenderPass::PASS_NORMMAP_MASK;
+                        //std::sort(sCull->beginRenderMap(type), sCull->endRenderMap(type), CompareTexture());
+                    }
+                    renderMaskedObjects(LLRenderPass::PASS_NORMMAP_MASK, no_idx_mask, true, false, rigged);
+                }
             }
         }
 
         for (int i = 0; i < 2; ++i)
         {
+            LL_PROFILE_ZONE_NAMED_CATEGORY_PIPELINE("gltf shadow alpha mask");
+            LL_PROFILE_GPU_ZONE("gltf shadow alpha mask");
             bool rigged = i == 1;
             gDeferredShadowGLTFAlphaMaskProgram.bind(rigged);
             LLGLSLShader::sCurBoundShaderPtr->uniform1f(LLShaderMgr::DEFERRED_SHADOW_TARGET_WIDTH, (float)target_width);
@@ -11066,10 +11106,10 @@ void LLPipeline::generateImpostor(LLVOAvatar* avatar, bool preview_avatar)
 		}
 
 		gGL.begin(LLRender::QUADS);
-		gGL.vertex3f(-1, -1, clip_plane);
-		gGL.vertex3f(1, -1, clip_plane);
-		gGL.vertex3f(1, 1, clip_plane);
-		gGL.vertex3f(-1, 1, clip_plane);
+		gGL.vertex3fui(-1, -1, clip_plane);
+		gGL.vertex3fui(1, -1, clip_plane);
+		gGL.vertex3fui(1, 1, clip_plane);
+		gGL.vertex3fui(-1, 1, clip_plane);
 		gGL.end();
 		gGL.flush();
 

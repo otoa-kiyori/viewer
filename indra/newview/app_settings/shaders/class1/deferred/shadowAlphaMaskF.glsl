@@ -33,8 +33,11 @@ out vec4 frag_color;
 
 uniform sampler2D diffuseMap;
 
+#if defined(SEMI_TRANSPARENT_SHADOWS)
 VARYING vec4 post_pos;
 VARYING float target_pos_x;
+#endif
+
 VARYING vec4 vertex_color;
 VARYING vec2 vary_texcoord0;
 uniform float minimum_alpha;
@@ -59,6 +62,7 @@ void main()
         discard;
     }
 
+#if defined(SEMI_TRANSPARENT_SHADOWS)
     if (alpha < 0.88) // treat as semi-transparent
     {
         if (fract(0.5*floor(target_pos_x / post_pos.w )) < 0.25)
@@ -68,9 +72,7 @@ void main()
     }
 #endif
 
-	frag_color = vec4(1,1,1,1);
-	
-#if !defined(DEPTH_CLAMP)
-	gl_FragDepth = max(post_pos.z/post_pos.w*0.5+0.5, 0.0);
 #endif
+
+	frag_color = vec4(1,1,1,1);
 }

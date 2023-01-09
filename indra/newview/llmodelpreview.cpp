@@ -2801,33 +2801,26 @@ void LLModelPreview::genBuffers(S32 lod, bool include_skin_weights)
                 LLFloaterModelPreview::addStringToLog(out, true);
             }
 
-            LLStrider<LLVector3> vertex_strider;
-            LLStrider<LLVector3> normal_strider;
-            LLStrider<LLVector2> tc_strider;
-            LLStrider<U16> index_strider;
-            LLStrider<LLVector4> weights_strider;
+            LLMappedVertexData md = vb->mapVertexBuffer();
+            U16* index_strider = vb->mapIndexBuffer();
 
-            vb->getVertexStrider(vertex_strider);
-            vb->getIndexStrider(index_strider);
+            LLVector4a* vertex_strider = md.mPosition;
+            LLVector4a* normal_strider = md.mNormal;
+            LLVector2* tc_strider = md.mTexCoord0;
+            LLVector4a* weights_strider = md.mWeight4;
 
-            if (skinned)
-            {
-                vb->getWeight4Strider(weights_strider);
-            }
 
-            LLVector4a::memcpyNonAliased16((F32*)vertex_strider.get(), (F32*)vf.mPositions, num_vertices * 4 * sizeof(F32));
+            LLVector4a::memcpyNonAliased16((F32*) vertex_strider, (F32*)vf.mPositions, num_vertices * 4 * sizeof(F32));
 
             if (vf.mTexCoords)
             {
-                vb->getTexCoord0Strider(tc_strider);
                 S32 tex_size = (num_vertices * 2 * sizeof(F32) + 0xF) & ~0xF;
-                LLVector4a::memcpyNonAliased16((F32*)tc_strider.get(), (F32*)vf.mTexCoords, tex_size);
+                LLVector4a::memcpyNonAliased16((F32*)tc_strider, (F32*)vf.mTexCoords, tex_size);
             }
 
             if (vf.mNormals)
             {
-                vb->getNormalStrider(normal_strider);
-                LLVector4a::memcpyNonAliased16((F32*)normal_strider.get(), (F32*)vf.mNormals, num_vertices * 4 * sizeof(F32));
+                LLVector4a::memcpyNonAliased16((F32*)normal_strider, (F32*)vf.mNormals, num_vertices * 4 * sizeof(F32));
             }
 
             if (skinned)
@@ -2840,14 +2833,14 @@ void LLModelPreview::genBuffers(S32 lod, bool include_skin_weights)
                     const LLModel::weight_list& weight_list = mdl->getJointInfluences(pos);
                     llassert(weight_list.size()>0 && weight_list.size() <= 4); // LLModel::loadModel() should guarantee this
 
-                    LLVector4 w(0, 0, 0, 0);
-
+                    LLVector4a w(0, 0, 0, 0);
+                    F32* wp = w.getF32ptr();
                     for (U32 i = 0; i < weight_list.size(); ++i)
                     {
                         F32 wght = llclamp(weight_list[i].mWeight, 0.001f, 0.999f);
                         F32 joint = (F32)weight_list[i].mJointIdx;
-                        w.mV[i] = joint + wght;
-                        llassert(w.mV[i] - (S32)w.mV[i]>0.0f); // because weights are non-zero, and range of wt values
+                        wp[i] = joint + wght;
+                        llassert(wp[i] - (S32)wp[i]>0.0f); // because weights are non-zero, and range of wt values
                         //should not cause floating point precision issues.
                     }
 
@@ -2861,7 +2854,8 @@ void LLModelPreview::genBuffers(S32 lod, bool include_skin_weights)
                 *(index_strider++) = vf.mIndices[i];
             }
 
-            vb->flush();
+            vb->unmapIndexBuffer();
+            vb->unmapIndexBuffer();
 
             mVertexBuffer[lod][mdl].push_back(vb);
 
@@ -3049,43 +3043,6 @@ U32 LLModelPreview::loadTextures(LLImportMaterial& material, void* opaque)
 
     material.mOpaqueData = NULL;
     return 0;
-}
-
-void LLModelPreview::addEmptyFace(LLModel* pTarget)
-{
-    U32 type_mask = LLVertexBuffer::MAP_VERTEX | LLVertexBuffer::MAP_NORMAL | LLVertexBuffer::MAP_TEXCOORD0;
-
-    LLPointer<LLVertexBuffer> buff = new LLVertexBuffer(type_mask, 0);
-
-    buff->allocateBuffer(1, 3, true);
-    memset((U8*)buff->getMappedData(), 0, buff->getSize());
-    memset((U8*)buff->getIndicesPointer(), 0, buff->getIndicesSize());
-
-    buff->validateRange(0, buff->getNumVerts() - 1, buff->getNumIndices(), 0);
-
-    LLStrider<LLVector3> pos;
-    LLStrider<LLVector3> norm;
-    LLStrider<LLVector2> tc;
-    LLStrider<U16> index;
-
-    buff->getVertexStrider(pos);
-
-    if (type_mask & LLVertexBuffer::MAP_NORMAL)
-    {
-        buff->getNormalStrider(norm);
-    }
-    if (type_mask & LLVertexBuffer::MAP_TEXCOORD0)
-    {
-        buff->getTexCoord0Strider(tc);
-    }
-
-    buff->getIndexStrider(index);
-
-    //resize face array
-    int faceCnt = pTarget->getNumVolumeFaces();
-    pTarget->setNumVolumeFaces(faceCnt + 1);
-    pTarget->setVolumeFaceData(faceCnt + 1, pos, norm, tc, index, buff->getNumVerts(), buff->getNumIndices());
-
 }
 
 //-----------------------------------------------------------------------------
@@ -3417,7 +3374,6 @@ BOOL LLModelPreview::render()
                         glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
                         glLineWidth(1.f);
                     }
-                    buffer->flush();
                 }
                 gGL.popMatrix();
             }
@@ -3541,15 +3497,15 @@ BOOL LLModelPreview::render()
 
                                     glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
                                     glLineWidth(1.f);
-
-                                    buffer->flush();
                                 }
                             }
                         }
                         gGL.popMatrix();
                     }
 
+
                     // only do this if mDegenerate was set in the preceding mesh checks [Check this if the ordering ever breaks]
+#if 0 // TODO -- rewrite this display to not butcher LLVertexBuffer
                     if (mHasDegenerate)
                     {
                         glLineWidth(PREVIEW_DEG_EDGE_WIDTH);
@@ -3626,6 +3582,7 @@ BOOL LLModelPreview::render()
                         gPipeline.enableLightsPreview();
                         gGL.setSceneBlendType(LLRender::BT_ALPHA);
                     }
+#endif
                 }
             }
         }
@@ -3706,11 +3663,10 @@ BOOL LLModelPreview::render()
 
                             const LLVolumeFace& face = model->getVolumeFace(i);
 
-                            LLStrider<LLVector3> position;
-                            buffer->getVertexStrider(position);
+                            LLMappedVertexData md = buffer->mapVertexBuffer();
 
-                            LLStrider<LLVector4> weight;
-                            buffer->getWeight4Strider(weight);
+                            LLVector4a* position = md.mPosition;
+                            LLVector4a* weight = md.mWeight4;
 
                             //quick 'n dirty software vertex skinning
 
@@ -3725,7 +3681,7 @@ BOOL LLModelPreview::render()
                             for (U32 j = 0; j < buffer->getNumVerts(); ++j)
                             {
                                 LLMatrix4a final_mat;
-                                F32 *wptr = weight[j].mV;
+                                F32 *wptr = weight[j].getF32ptr();
                                 LLSkinningUtil::getPerVertexSkinMatrix(wptr, mat, true, final_mat, max_joints);
 
                                 //VECTORIZE THIS
@@ -3736,10 +3692,10 @@ BOOL LLModelPreview::render()
                                 bind_shape_matrix.affineTransform(v, t);
                                 final_mat.affineTransform(t, dst);
 
-                                position[j][0] = dst[0];
-                                position[j][1] = dst[1];
-                                position[j][2] = dst[2];
+                                position[j] = dst;
                             }
+
+                            buffer->unmapVertexBuffer();
 
                             llassert(model->mMaterialList.size() > i);
                             const std::string& binding = instance.mModel->mMaterialList[i];

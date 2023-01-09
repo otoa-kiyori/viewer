@@ -487,14 +487,14 @@ void LLViewerParcelMgr::renderOneSegment(F32 x1, F32 y1, F32 x2, F32 y2, F32 hei
 	if (height < 1.f)
 	{
 		z = z1+height;
-		gGL.vertex3f(x1, y1, z);
+		gGL.vertex3fui(x1, y1, z);
 
-		gGL.vertex3f(x1, y1, z1);
+		gGL.vertex3fui(x1, y1, z1);
 
-		gGL.vertex3f(x2, y2, z2);
+		gGL.vertex3fui(x2, y2, z2);
 
 		z = z2+height;
-		gGL.vertex3f(x2, y2, z);
+		gGL.vertex3fui(x2, y2, z);
 	}
 	else
 	{
@@ -524,18 +524,18 @@ void LLViewerParcelMgr::renderOneSegment(F32 x1, F32 y1, F32 x2, F32 y2, F32 hei
 
 
 		gGL.texCoord2f(tex_coord1*0.5f+0.5f, z1*0.5f);
-		gGL.vertex3f(x1, y1, z1);
+		gGL.vertex3fui(x1, y1, z1);
 
 		gGL.texCoord2f(tex_coord2*0.5f+0.5f, z2*0.5f);
-		gGL.vertex3f(x2, y2, z2);
+		gGL.vertex3fui(x2, y2, z2);
 
 		// top edge stairsteps
 		z = llmax(z2+height, z1+height);
 		gGL.texCoord2f(tex_coord2*0.5f+0.5f, z*0.5f);
-		gGL.vertex3f(x2, y2, z);
+		gGL.vertex3fui(x2, y2, z);
 
 		gGL.texCoord2f(tex_coord1*0.5f+0.5f, z*0.5f);
-		gGL.vertex3f(x1, y1, z);
+		gGL.vertex3fui(x1, y1, z);
 	}
 }
 
@@ -1083,7 +1083,7 @@ F32 gpu_benchmark()
     delete [] pixels;
 
 	//make a dummy triangle to draw with
-	LLPointer<LLVertexBuffer> buff = new LLVertexBuffer(LLVertexBuffer::MAP_VERTEX, GL_STREAM_DRAW);
+	LLPointer<LLVertexBuffer> buff = new LLVertexBuffer(LLVertexBuffer::MAP_VERTEX, GL_STATIC_DRAW);
 
 	if (!buff->allocateBuffer(3, 0, true))
 	{
@@ -1092,14 +1092,12 @@ F32 gpu_benchmark()
 		return -1.f;
 	}
 
-	LLStrider<LLVector3> v;
+    LLMappedVertexData md = buff->mapVertexBuffer();
+    LLVector4a* v = md.mPosition;
 
-	if (! buff->getVertexStrider(v))
+	if (!v)
 	{
-		LL_WARNS("Benchmark") << "GL LLVertexBuffer::getVertexStrider() returned false, "
-				   << "buff->getMappedData() is"
-				   << (buff->getMappedData()? " not" : "")
-				   << " NULL" << LL_ENDL;
+		LL_WARNS("Benchmark") << "GL LLVertexBuffer::getVertexStrider() returned false." << LL_ENDL;
 		// abandon the benchmark test
 		return -1.f;
 	}
@@ -1109,7 +1107,7 @@ F32 gpu_benchmark()
 	v[1].set(-1, -3, 0);
 	v[2].set(3, 1, 0);
 
-	buff->flush();
+	buff->unmapVertexBuffer();
 
 	// ensure matched pair of bind() and unbind() calls
 	ShaderBinder binder(gBenchmarkProgram);

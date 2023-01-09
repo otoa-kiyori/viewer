@@ -58,12 +58,12 @@ public:
 	/*virtual*/ LLDrawable* createDrawable(LLPipeline *pipeline);
 	/*virtual*/ BOOL		updateGeometry(LLDrawable *drawable);
 	/*virtual*/ void		getGeometry(S32 idx,
-								LLStrider<LLVector4a>& verticesp,
-								LLStrider<LLVector3>& normalsp, 
-								LLStrider<LLVector2>& texcoordsp,
-								LLStrider<LLColor4U>& colorsp, 
-								LLStrider<LLColor4U>& emissivep,
-								LLStrider<U16>& indicesp);
+								LLVector4a* &verticesp,
+								LLVector4a* &normalsp,
+								LLVector2* &texcoordsp,
+								LLColor4U* &colorsp,
+								LLColor4U* &emissivep,
+								U16* &indicesp);
 
 	void updateFaceSize(S32 idx) { }
 	/*virtual*/ void updateTextures();											

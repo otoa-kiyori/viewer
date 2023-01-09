@@ -776,13 +776,13 @@ bool LLWorldMapView::drawMipmapLevel(S32 width, S32 height, S32 level, bool load
 
 					gGL.begin(LLRender::QUADS);
 						gGL.texCoord2f(0.f, 1.f);
-						gGL.vertex3f(left, top, 0.f);
+						gGL.vertex3fui(left, top, 0.f);
 						gGL.texCoord2f(0.f, 0.f);
-						gGL.vertex3f(left, bottom, 0.f);
+						gGL.vertex3fui(left, bottom, 0.f);
 						gGL.texCoord2f(1.f, 0.f);
-						gGL.vertex3f(right, bottom, 0.f);
+						gGL.vertex3fui(right, bottom, 0.f);
 						gGL.texCoord2f(1.f, 1.f);
-						gGL.vertex3f(right, top, 0.f);
+						gGL.vertex3fui(right, top, 0.f);
 					gGL.end();
 #if DEBUG_DRAW_TILE
 					drawTileOutline(level, top, left, bottom, right);

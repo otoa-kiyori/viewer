@@ -5322,7 +5322,7 @@ S32 LLViewerObject::setTEMaterialID(const U8 te, const LLMaterialID& pMaterialID
 							 << ", material " << pMaterialID
 							 << LL_ENDL;
 	}
-	//else if (pMaterialID != tep->getMaterialID())
+	else if (pMaterialID != tep->getMaterialID())
 	{
 		LL_DEBUGS("Material") << "Changing texture entry for te " << (S32)te
 							 << ", object " << mID
@@ -5477,6 +5477,7 @@ S32 LLViewerObject::setTERotation(const U8 te, const F32 r)
 	if (mDrawable.notNull() && retval)
 	{
 		gPipeline.markRebuild(mDrawable, LLDrawable::REBUILD_TCOORD);
+        shrinkWrap();
 	}
 	return retval;
 }
@@ -7260,6 +7261,18 @@ void LLViewerObject::setRenderMaterialIDs(const LLRenderMaterialParams* material
         {
             const LLUUID& id = material_params ? material_params->getMaterial(te) : LLUUID::null;
             setRenderMaterialID(te, id, false);
+        }
+    }
+}
+
+void LLViewerObject::shrinkWrap()
+{
+    if (!mShouldShrinkWrap)
+    {
+        mShouldShrinkWrap = true;
+        if (mDrawable)
+        { // we weren't shrink wrapped before but we are now, update the spatial partition
+            gPipeline.markPartitionMove(mDrawable);
         }
     }
 }
