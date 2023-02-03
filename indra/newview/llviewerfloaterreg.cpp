@@ -83,6 +83,7 @@
 #include "llfloaterhud.h"
 #include "llfloaterimagepreview.h"
 #include "llfloaterimsession.h"
+#include "llfloaterinventoryiteminfo.h"
 #include "llfloaterinspect.h"
 #include "llfloaterjoystick.h"
 #include "llfloaterlagmeter.h"
@@ -278,7 +279,7 @@ void LLViewerFloaterReg::registerFloaters()
 	LLFloaterReg::add("incoming_call", "floater_incoming_call.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLIncomingCallDialog>);
 	LLFloaterReg::add("inventory", "floater_my_inventory.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterSidePanelContainer>);
 	LLFloaterReg::add("inspect", "floater_inspect.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterInspect>);
-	LLFloaterReg::add("item_properties", "floater_item_properties.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterItemProperties>);
+    LLFloaterReg::add("inventory_item_info", "floater_inventory_item_info.xml", (LLFloaterBuildFunc)&LLFloaterReg::build<LLFloaterItemProperties>);
 	LLInspectAvatarUtil::registerFloater();
 	LLInspectGroupUtil::registerFloater();
 	LLInspectObjectUtil::registerFloater();

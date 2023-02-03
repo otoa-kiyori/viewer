@@ -14,7 +14,7 @@
  * 
  * This library is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
- * ABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
  * Lesser General Public License for more details.
  * 
  * You should have received a copy of the GNU Lesser General Public
@@ -205,22 +205,6 @@ private:
     message_list_t mMessages;
 
     LLTextEditor*	mEditor;
-};
-
-//-----------------------------------------------------------------------------
-// LLFloaterItemProperties
-//-----------------------------------------------------------------------------
-
-class LLFloaterItemProperties : public LLFloater
-{
-public:
-	LLFloaterItemProperties(const LLSD& key);
-	virtual ~LLFloaterItemProperties();
-    
-	BOOL postBuild();
-	virtual void onOpen(const LLSD& key);
-    
-private:
 };
 
 #endif // LL_LLFLOATERMARKETPLACELISTINGS_H
