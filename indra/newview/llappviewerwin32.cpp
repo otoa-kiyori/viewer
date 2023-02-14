@@ -386,27 +386,30 @@ int APIENTRY WINMAIN(HINSTANCE hInstance,
 		LL_WARNS() << "Application init failed." << LL_ENDL;
 		return -1;
 	}
-	
-	NvAPI_Status status;
-    
-	// Initialize NVAPI
-	status = NvAPI_Initialize();
-	NvDRSSessionHandle hSession = 0;
 
-    if (status == NVAPI_OK) 
-	{
-		// Create the session handle to access driver settings
-		status = NvAPI_DRS_CreateSession(&hSession);
-		if (status != NVAPI_OK) 
-		{
-			nvapi_error(status);
-		}
-		else
-		{
-			//override driver setting as needed
-			ll_nvapi_init(hSession);
-		}
-	}
+    NvDRSSessionHandle hSession = 0;
+    if (gSavedSettings.getBOOL("NvAPISessionOverride"))
+    {
+        NvAPI_Status status;
+
+        // Initialize NVAPI
+        status = NvAPI_Initialize();
+
+        if (status == NVAPI_OK)
+        {
+            // Create the session handle to access driver settings
+            status = NvAPI_DRS_CreateSession(&hSession);
+            if (status != NVAPI_OK)
+            {
+                nvapi_error(status);
+            }
+            else
+            {
+                //override driver setting as needed
+                ll_nvapi_init(hSession);
+            }
+        }
+    }
 
 	// Have to wait until after logging is initialized to display LFH info
 	if (num_heaps > 0)
