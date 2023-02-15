@@ -1695,6 +1695,12 @@ void LLItemBridge::performAction(LLInventoryModel* model, std::string action)
 		restoreItem();
 		return;
 	}
+    else if ("thumbnail" == action)
+    {
+        LLSD data(mUUID);
+        LLFloaterReg::showInstance("change_item_thumbnail", data);
+        return;
+    }
 	else if ("copy_uuid" == action)
 	{
 		// Single item only
